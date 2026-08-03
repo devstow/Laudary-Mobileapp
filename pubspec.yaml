@@ -1,0 +1,40 @@
+name: mobileapp
+description: "Smart-Wash — Customer app (KSA)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  dio: ^5.7.0                    # HTTP client (interceptors for X-Tenant-Id + Bearer + refresh)
+  flutter_secure_storage: ^9.2.2 # tokens + selected tenant (secure OS storage)
+  provider: ^6.1.2              # state management
+  intl: ^0.20.2                 # currency + date formatting
+  flutter_map: ^8.1.1           # OSM/Leaflet-style interactive map (pickup pin picker + viewer)
+  latlong2: ^0.9.1              # LatLng type for flutter_map
+  geolocator: ^13.0.2           # "use my current location" for the pickup pin
+  url_launcher: ^6.3.1          # tap-to-call + open pickup/delivery in maps (parity w/ web)
+  image_picker: ^1.1.2          # driver proof-of-delivery photo (camera/gallery)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# Android build fix: path_provider_android 2.3.x pulls the `jni` plugin whose Android Gradle
+# script is incompatible with the current AGP/Kotlin setup ("Could not find method kotlin()").
+# path_provider is only a transitive (desktop secure-storage) dep — unused on Android — so pin
+# it to the pre-jni line to drop the broken plugin entirely.
+dependency_overrides:
+  path_provider_android: ">=2.2.0 <2.3.0"
+
+flutter:
+  uses-material-design: true
+  generate: false
