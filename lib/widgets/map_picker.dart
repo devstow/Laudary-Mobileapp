@@ -9,6 +9,7 @@ import '../l10n/l10n.dart';
 import '../models/map_settings.dart';
 import '../services/geo_service.dart';
 import '../theme/app_theme.dart';
+import 'map_layers.dart';
 import 'ui.dart';
 
 /// Result of the pin picker.
@@ -36,6 +37,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   Timer? _debounce;
   bool _resolving = false;
   bool _locating = false;
+  MapStyle _style = MapStyle.map;
   List<GeoResult> _suggestions = const [];
 
   @override
@@ -153,13 +155,17 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
               onTap: (_, _) => FocusScope.of(context).unfocus(),
             ),
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.smartwash.customer',
-                maxZoom: 19,
-              ),
+              ...mapTiles(_style, pkg: 'com.smartwash.customer'),
             ],
           ),
+
+          // Map / Satellite toggle (hidden while the search suggestions are open).
+          if (_suggestions.isEmpty)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 74,
+              right: 14,
+              child: MapStyleToggle(style: _style, onChanged: (s) => setState(() => _style = s)),
+            ),
 
           // Fixed centre pin.
           IgnorePointer(
