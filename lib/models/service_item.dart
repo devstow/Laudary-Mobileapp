@@ -6,6 +6,7 @@ class ServiceItem {
     required this.id,
     required this.name,
     this.category,
+    this.imageUrl,
     this.description,
     required this.unit,
     required this.basePrice,
@@ -15,7 +16,12 @@ class ServiceItem {
 
   final String id;
   final String name;
+
+  /// Managed category name (falls back to the legacy free-text category).
   final String? category;
+
+  /// Relative or absolute image URL; resolve with AppConfig.mediaUrl before loading.
+  final String? imageUrl;
   final String? description;
   final ServiceUnit unit;
   final double basePrice;
@@ -25,7 +31,9 @@ class ServiceItem {
   factory ServiceItem.fromJson(Map<String, dynamic> j) => ServiceItem(
         id: j['id'] as String,
         name: j['name'] as String? ?? '',
-        category: j['category'] as String?,
+        // Prefer the managed category name; fall back to the deprecated free-text field.
+        category: (j['categoryName'] as String?) ?? (j['category'] as String?),
+        imageUrl: j['imageUrl'] as String?,
         description: j['description'] as String?,
         unit: ServiceUnit.from((j['unit'] as num?)?.toInt()),
         basePrice: (j['basePrice'] as num?)?.toDouble() ?? 0,

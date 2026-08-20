@@ -1,8 +1,11 @@
+import 'package:dio/dio.dart';
+
 import '../core/api_client.dart';
 import '../models/map_settings.dart';
 import '../models/order.dart';
 import '../models/order_detail.dart';
 import '../models/order_invoice.dart';
+import '../models/order_receipt.dart';
 import '../models/service_item.dart';
 import 'api_exception.dart';
 
@@ -127,6 +130,24 @@ class OrderService {
     final res = await _api.dio.get('/api/portal/orders/$orderId/invoice');
     if (!isOk(res)) throw ApiException.from(res);
     return OrderInvoice.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// GET /api/portal/orders/{id}/receipt — the order's payment receipt (self-scoped).
+  Future<OrderReceipt> receipt(String orderId) async {
+    final res = await _api.dio.get('/api/portal/orders/$orderId/receipt');
+    if (!isOk(res)) throw ApiException.from(res);
+    return OrderReceipt.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// GET /api/portal/orders/{id}/receipt/pdf — the rendered receipt PDF bytes (authenticated).
+  Future<List<int>> receiptPdfBytes(String orderId) async {
+    final res = await _api.dio.get<List<int>>(
+      '/api/portal/orders/$orderId/receipt/pdf',
+      queryParameters: {'download': true},
+      options: Options(responseType: ResponseType.bytes),
+    );
+    if (res.statusCode != 200 || res.data == null) throw ApiException.from(res);
+    return res.data!;
   }
 
   /// GET /api/track — public tracking (anonymous). Needs the tenant identifier explicitly.

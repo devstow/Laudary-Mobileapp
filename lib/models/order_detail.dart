@@ -1,13 +1,16 @@
 import 'enums.dart';
 
 class OrderItem {
-  OrderItem({this.serviceId, required this.serviceName, required this.unitPrice, required this.quantity, required this.lineTotal, this.notes});
+  OrderItem({this.serviceId, required this.serviceName, required this.unitPrice, required this.quantity, required this.lineTotal, this.notes, this.imageUrl});
   final String? serviceId;
   final String serviceName;
   final double unitPrice;
   final int quantity;
   final double lineTotal;
   final String? notes;
+
+  /// Relative/absolute service image URL; resolve with AppConfig.mediaUrl before loading.
+  final String? imageUrl;
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
         serviceId: j['serviceId'] as String?,
@@ -16,6 +19,7 @@ class OrderItem {
         quantity: (j['quantity'] as num?)?.toInt() ?? 0,
         lineTotal: (j['lineTotal'] as num?)?.toDouble() ?? 0,
         notes: j['notes'] as String?,
+        imageUrl: j['imageUrl'] as String?,
       );
 }
 

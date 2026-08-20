@@ -178,7 +178,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
+            // Bottom inset clears the translucent bottom nav bar (HomeShell uses extendBody: true), so the
+            // last tile — Logout — is never hidden behind it. Matches the dashboard/payments tabs (100).
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 100),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SectionHeader(context.t('Default pickup address')),
               const SizedBox(height: 12),

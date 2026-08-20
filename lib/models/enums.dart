@@ -74,6 +74,20 @@ enum OrderInvoiceStatus {
       OrderInvoiceStatus.values.firstWhere((e) => e.value == v, orElse: () => OrderInvoiceStatus.draft);
 }
 
+/// Receipt lifecycle (matches SmartWash OrderReceiptStatus int values).
+enum OrderReceiptStatus {
+  pending(0, 'Pending'),
+  issued(1, 'Issued'),
+  paid(2, 'Paid'),
+  voided(3, 'Void');
+
+  const OrderReceiptStatus(this.value, this.label);
+  final int value;
+  final String label;
+  static OrderReceiptStatus from(int? v) =>
+      OrderReceiptStatus.values.firstWhere((e) => e.value == v, orElse: () => OrderReceiptStatus.pending);
+}
+
 enum PaymentMethod {
   cash(0, 'Cash'),
   card(1, 'Card'),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/config.dart';
 import '../../l10n/l10n.dart';
 import '../../models/service_item.dart';
 import '../../services/api_exception.dart';
@@ -229,6 +230,8 @@ class _ServiceRow extends StatelessWidget {
         boxShadow: selected ? null : AppShadows.soft,
       ),
       child: Row(children: [
+        _ServiceThumb(url: service.imageUrl),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(service.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
@@ -258,6 +261,37 @@ class _ServiceRow extends StatelessWidget {
         else
           QuantityStepper(value: qty, onChanged: onChanged, min: 0),
       ]),
+    );
+  }
+}
+
+/// Square service thumbnail with a graceful icon fallback (no image, or load error).
+class _ServiceThumb extends StatelessWidget {
+  const _ServiceThumb({required this.url});
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = AppConfig.mediaUrl(url);
+    final fallback = Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(AppRadius.control),
+      ),
+      child: Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 22),
+    );
+    if (resolved == null) return fallback;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.control),
+      child: Image.network(
+        resolved,
+        width: 46,
+        height: 46,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => fallback,
+      ),
     );
   }
 }

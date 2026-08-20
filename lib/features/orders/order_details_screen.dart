@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/config.dart';
 import '../../l10n/l10n.dart';
 import '../../models/enums.dart';
 import '../../models/order.dart';
@@ -17,6 +18,7 @@ import '../../widgets/map_viewer.dart';
 import '../../widgets/order_timeline.dart';
 import '../../widgets/ui.dart';
 import '../invoice/invoice_screen.dart';
+import '../receipt/receipt_screen.dart';
 import '../neworder/new_order_screen.dart';
 
 class OrderDetailsScreen extends StatefulWidget {
@@ -61,6 +63,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   void _viewInvoice() {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => InvoiceScreen(orderId: widget.orderId, orderNumber: _order?.orderNumber ?? widget.orderNumber),
+    ));
+  }
+
+  void _viewReceipt() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ReceiptScreen(orderId: widget.orderId, orderNumber: _order?.orderNumber ?? widget.orderNumber),
     ));
   }
 
@@ -187,10 +195,17 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             ? null
             : [
                 IconButton(
-                  icon: const Icon(Icons.receipt_long_rounded),
+                  icon: const Icon(Icons.description_rounded),
                   tooltip: context.t('View invoice'),
                   onPressed: _viewInvoice,
                 ),
+                // A receipt exists only once payment is fully completed (same rule as web/portal).
+                if (o.paymentStatus == PaymentStatus.paid)
+                  IconButton(
+                    icon: const Icon(Icons.receipt_long_rounded),
+                    tooltip: context.t('View receipt'),
+                    onPressed: _viewReceipt,
+                  ),
                 if (o.canEdit)
                   IconButton(
                     icon: const Icon(Icons.edit_rounded),
@@ -446,6 +461,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _itemThumb(it.imageUrl),
+        const SizedBox(width: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(7)),
@@ -462,6 +479,21 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         const SizedBox(width: 8),
         Text(money(it.lineTotal, currency, lang), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
       ]),
+    );
+  }
+
+  Widget _itemThumb(String? url) {
+    final resolved = AppConfig.mediaUrl(url);
+    final fallback = Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(9)),
+      child: Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 19),
+    );
+    if (resolved == null) return fallback;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(9),
+      child: Image.network(resolved, width: 38, height: 38, fit: BoxFit.cover, errorBuilder: (_, _, _) => fallback),
     );
   }
 
