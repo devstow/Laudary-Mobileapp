@@ -125,24 +125,27 @@ class _ServicePickerScreenState extends State<ServicePickerScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: _onSearch,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: context.t('Search services'),
-                prefixIcon: const Icon(Icons.search_rounded),
-                isDense: true,
-                suffixIcon: _q.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 20),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          _q = '';
-                          _load(reset: true);
-                        }),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: DecoratedBox(
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.control), boxShadow: AppShadows.soft),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: _onSearch,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: context.t('Search services'),
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  fillColor: AppColors.surface,
+                  suffixIcon: _q.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            _q = '';
+                            _load(reset: true);
+                          }),
+                ),
               ),
             ),
           ),
@@ -186,22 +189,40 @@ class _ServicePickerScreenState extends State<ServicePickerScreen> {
     );
   }
 
+  /// Claundry "My Bag" footer: items + total summary over a gradient button.
   Widget _bottomBar(String lang, String currency) {
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-        decoration: BoxDecoration(color: AppColors.surface, border: Border(top: BorderSide(color: AppColors.line))),
-        child: Row(children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text('$_selectedCount ${context.t('selected')}', style: TextStyle(color: AppColors.muted, fontSize: 12)),
-            Text(money(_total, currency, lang), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.ink)),
-          ]),
-          const SizedBox(width: 16),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: () => Navigator.of(context).pop<ServiceSelection>((qty: _qty, byId: _byId)),
-              child: Text(context.t('Done')),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+        boxShadow: AppShadows.card,
+      ),
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.shopping_basket_rounded, color: AppColors.primary, size: 20),
             ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('$_selectedCount ${context.t('selected')}',
+                  style: TextStyle(color: AppColors.inkSoft, fontSize: 14, fontWeight: FontWeight.w700)),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(context.t('Total'), style: TextStyle(color: AppColors.muted, fontSize: 11.5)),
+              Text(money(_total, currency, lang),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.primary)),
+            ]),
+          ]),
+          const SizedBox(height: 12),
+          PrimaryButton(
+            label: context.t('Done'),
+            icon: Icons.check_rounded,
+            onPressed: () => Navigator.of(context).pop<ServiceSelection>((qty: _qty, byId: _byId)),
           ),
         ]),
       ),
@@ -221,42 +242,55 @@ class _ServiceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = qty > 0;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      padding: const EdgeInsets.all(13),
+      duration: const Duration(milliseconds: 160),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: selected ? AppColors.primarySoft : AppColors.surface,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: selected ? AppColors.primary : AppColors.line, width: selected ? 1.4 : 1),
-        boxShadow: selected ? null : AppShadows.soft,
+        border: Border.all(color: selected ? AppColors.primary : AppColors.lineSoft, width: selected ? 1.5 : 1),
+        boxShadow: selected ? AppShadows.glow(AppColors.primary.withValues(alpha: 0.5)) : AppShadows.soft,
       ),
       child: Row(children: [
         _ServiceThumb(url: service.imageUrl),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(service.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+            Text(service.name, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: AppColors.ink)),
             if ((service.category ?? '').isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(service.category!, style: TextStyle(color: AppColors.faint, fontSize: 11.5)),
+                padding: const EdgeInsets.only(top: 3),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(color: AppColors.goldSoft, borderRadius: BorderRadius.circular(6)),
+                  child: Text(service.category!,
+                      style: const TextStyle(color: AppColors.goldDark, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                ),
               ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 4),
             Text('${money(service.basePrice, currency, lang)} / ${context.t(service.unit.label)}',
-                style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                style: TextStyle(color: AppColors.muted, fontSize: 12.5, fontWeight: FontWeight.w600)),
             if (qty > 0)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: 3),
                 child: Text('${context.t('Line total')}: ${money(service.basePrice * qty, currency, lang)}',
-                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 12.5)),
               ),
           ]),
         ),
         const SizedBox(width: 10),
         if (qty == 0)
-          IconButton.filledTonal(
-            onPressed: () => onChanged(1),
-            icon: const Icon(Icons.add_rounded),
-            style: IconButton.styleFrom(backgroundColor: AppColors.primarySoft, foregroundColor: AppColors.primary),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => onChanged(1),
+              child: Ink(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(gradient: AppColors.brandGradient, shape: BoxShape.circle),
+                child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+              ),
+            ),
           )
         else
           QuantityStepper(value: qty, onChanged: onChanged, min: 0),
@@ -265,7 +299,7 @@ class _ServiceRow extends StatelessWidget {
   }
 }
 
-/// Square service thumbnail with a graceful icon fallback (no image, or load error).
+/// Round service thumbnail with a graceful icon fallback (no image, or load error).
 class _ServiceThumb extends StatelessWidget {
   const _ServiceThumb({required this.url});
   final String? url;
@@ -274,21 +308,21 @@ class _ServiceThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final resolved = AppConfig.mediaUrl(url);
     final fallback = Container(
-      width: 46,
-      height: 46,
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(AppRadius.control),
-      ),
-      child: Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 22),
+      width: 54,
+      height: 54,
+      decoration: BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
+      child: const Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 24),
     );
     if (resolved == null) return fallback;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.control),
+    return Container(
+      width: 54,
+      height: 54,
+      decoration: BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
+      clipBehavior: Clip.antiAlias,
       child: Image.network(
         resolved,
-        width: 46,
-        height: 46,
+        width: 54,
+        height: 54,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => fallback,
       ),

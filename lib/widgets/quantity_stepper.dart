@@ -18,32 +18,33 @@ class QuantityStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(AppRadius.control),
-        border: Border.all(color: AppColors.line),
+    // Claundry-style: two small bordered square buttons around the number.
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      _btn(Icons.remove_rounded, value > min, () => onChanged(value - 1), filled: false),
+      SizedBox(
+        width: 34,
+        child: Text('$value', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5, color: AppColors.ink)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        _btn(Icons.remove_rounded, value > min, () => onChanged(value - 1)),
-        SizedBox(
-          width: 38,
-          child: Text('$value', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.ink)),
-        ),
-        _btn(Icons.add_rounded, value < max, () => onChanged(value + 1)),
-      ]),
-    );
+      _btn(Icons.add_rounded, value < max, () => onChanged(value + 1), filled: true),
+    ]);
   }
 
-  Widget _btn(IconData icon, bool enabled, VoidCallback onTap) {
+  Widget _btn(IconData icon, bool enabled, VoidCallback onTap, {required bool filled}) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.control),
+        borderRadius: BorderRadius.circular(10),
         onTap: enabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.all(9),
-          child: Icon(icon, size: 20, color: enabled ? AppColors.primary : AppColors.faint),
+        child: Ink(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            gradient: filled && enabled ? AppColors.brandGradient : null,
+            color: filled && enabled ? null : AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: filled && enabled ? Colors.transparent : AppColors.line),
+          ),
+          child: Icon(icon, size: 18, color: filled && enabled ? Colors.white : (enabled ? AppColors.ink : AppColors.faint)),
         ),
       ),
     );

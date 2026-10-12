@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config.dart';
 import '../../l10n/l10n.dart';
+import '../../models/ai.dart';
 import '../../models/enums.dart';
 import '../../models/order.dart';
 import '../../models/order_detail.dart';
@@ -17,6 +18,7 @@ import '../../widgets/journey_stepper.dart';
 import '../../widgets/map_viewer.dart';
 import '../../widgets/order_timeline.dart';
 import '../../widgets/ui.dart';
+import '../assistant/assistant_screen.dart';
 import '../invoice/invoice_screen.dart';
 import '../receipt/receipt_screen.dart';
 import '../neworder/new_order_screen.dart';
@@ -192,8 +194,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       appBar: AppBar(
         title: Text(o?.orderNumber ?? widget.orderNumber ?? context.t('Order details')),
         actions: o == null
-            ? null
+            ? [_assistant()]
             : [
+                _assistant(),
                 IconButton(
                   icon: const Icon(Icons.description_rounded),
                   tooltip: context.t('View invoice'),
@@ -264,6 +267,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         if (!offTrack) ...[
           _AccordionSection(
             title: context.t('Tracking'),
+            icon: Icons.route_rounded,
             child: Padding(padding: const EdgeInsets.only(top: 4), child: JourneyStepper(status: o.status, type: o.type)),
           ),
           const SizedBox(height: 12),
@@ -273,6 +277,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         if (o.hasPickupPin || o.pickupAddress != null || o.contactPhone != null) ...[
           _AccordionSection(
             title: context.t('Pickup & delivery'),
+            icon: Icons.location_on_rounded,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (o.hasPickupPin || o.hasDeliveryPin) ...[
                 MapViewer(
@@ -305,6 +310,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         // Items (expanded by default — what customers check most)
         _AccordionSection(
           title: '${context.t('Items')} · ${o.items.length}',
+          icon: Icons.checkroom_rounded,
           initiallyExpanded: true,
           child: Column(children: [for (final it in o.items) _itemRow(it, currency, lang)]),
         ),
@@ -313,6 +319,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         // Payment (merged: cost breakdown + payment state in one card)
         _AccordionSection(
           title: context.t('Payment'),
+          icon: Icons.account_balance_wallet_rounded,
           child: Column(children: [
             MoneyRow(context.t('Subtotal'), money(o.subtotal, currency, lang)),
             if (o.discountAmount > 0) MoneyRow(context.t('Discount'), '- ${money(o.discountAmount, currency, lang)}'),
@@ -340,13 +347,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
         if (o.notes != null && o.notes!.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
-          _AccordionSection(title: context.t('Notes'), child: Text(o.notes!, style: TextStyle(color: AppColors.inkSoft, height: 1.4))),
+          _AccordionSection(title: context.t('Notes'), icon: Icons.sticky_note_2_rounded, child: Text(o.notes!, style: TextStyle(color: AppColors.inkSoft, height: 1.4))),
         ],
 
         const SizedBox(height: 12),
         // Activity timeline
         _AccordionSection(
           title: context.t('Activity'),
+          icon: Icons.history_rounded,
           child: _timeline.isEmpty
               ? Text(context.t('No activity yet'), style: TextStyle(color: AppColors.muted))
               : OrderTimeline(events: _timeline),
@@ -357,18 +365,29 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   // Pinned bottom CTA for the delivery-time step (the one high-value action on this screen).
   Widget _deliveryCta(OrderDetail o) {
-    return SafeArea(
-      minimum: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-      child: ElevatedButton.icon(
-        onPressed: _busy ? null : _chooseDelivery,
-        icon: _busy
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-            : const Icon(Icons.local_shipping_rounded),
-        label: Text(context.t(o.deliveryAt == null ? 'Choose delivery time' : 'Change delivery time')),
-        style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+        boxShadow: AppShadows.card,
+      ),
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        child: PrimaryButton(
+          onPressed: _chooseDelivery,
+          busy: _busy,
+          icon: Icons.local_shipping_rounded,
+          label: context.t(o.deliveryAt == null ? 'Choose delivery time' : 'Change delivery time'),
+        ),
       ),
     );
   }
+
+  // Opens the assistant about THIS order ("Where is this order?", "Cancel this order").
+  Widget _assistant() => AssistantButton(
+        plain: true,
+        pageContext: AiPageContext(module: 'my_orders', recordType: 'order', recordId: widget.orderId),
+      );
 
   Widget _menuItem(IconData icon, String label, {bool danger = false}) {
     final c = danger ? AppColors.danger : AppColors.ink;
@@ -379,44 +398,123 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     ]);
   }
 
+  /// How far along the order is (0..1) for the progress ring — same 5-stage collapse
+  /// the tracking stepper uses.
+  double _progress(OrderStatus s) {
+    switch (s) {
+      case OrderStatus.delivered:
+        return 1;
+      case OrderStatus.outForDelivery:
+        return 0.8;
+      case OrderStatus.ready:
+        return 0.6;
+      case OrderStatus.inProcess:
+      case OrderStatus.atFacility:
+      case OrderStatus.pickedUp:
+        return 0.4;
+      case OrderStatus.cancelled:
+      case OrderStatus.onHold:
+        return 1;
+      default:
+        return 0.2;
+    }
+  }
+
+  /// Claundry "Order Details" header: a progress ring around the status icon, then the
+  /// order summary and a soft-blue info panel.
   Widget _hero(OrderDetail o, String currency, String lang) {
-    return BrandHero(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-            child: Text(o.orderNumber,
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
-          ),
+    final c = statusColor(o.status);
+    final p = _progress(o.status);
+    return SoftCard(
+      padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+      child: Column(children: [
+        SizedBox(
+          width: 132,
+          height: 132,
+          child: Stack(alignment: Alignment.center, children: [
+            SizedBox.expand(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: p),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeOutCubic,
+                builder: (context, v, _) => CircularProgressIndicator(
+                  value: v,
+                  strokeWidth: 9,
+                  strokeCap: StrokeCap.round,
+                  color: c,
+                  backgroundColor: c.withValues(alpha: 0.12),
+                ),
+              ),
+            ),
+            Container(
+              width: 92,
+              height: 92,
+              decoration: BoxDecoration(
+                color: c.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+                border: Border.all(color: c.withValues(alpha: 0.25), width: 2),
+              ),
+              child: Icon(statusIcon(o.status), color: c, size: 40),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        StatusChip(o.status),
+        const SizedBox(height: 10),
+        Text(o.orderNumber,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.ink, fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+        const SizedBox(height: 4),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            Text(money(o.total, currency, lang),
+                style: const TextStyle(color: AppColors.primary, fontSize: 18, fontWeight: FontWeight.w900)),
+            Text('·', style: TextStyle(color: AppColors.faint)),
+            Text('${o.items.length} ${context.t(o.items.length == 1 ? 'item' : 'items')}',
+                style: TextStyle(color: AppColors.muted, fontSize: 13.5, fontWeight: FontWeight.w600)),
+            if (o.isExpress)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(6)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.bolt_rounded, size: 13, color: AppColors.onGold),
+                  Text(context.t('Express'), style: const TextStyle(color: AppColors.onGold, fontWeight: FontWeight.w800, fontSize: 11)),
+                ]),
+              ),
+          ],
+        ),
+        if (o.pickupAt != null || o.deliveryAt != null) ...[
+          const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(AppRadius.chip)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(statusIcon(o.status), color: Colors.white, size: 15),
-              const SizedBox(width: 5),
-              Text(context.t(o.status.label), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12.5)),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(AppRadius.control)),
+            child: Column(children: [
+              if (o.pickupAt != null) _panelRow(context.t('Pickup time'), _fmt(o.pickupAt!, lang)),
+              if (o.deliveryAt != null) _panelRow(context.t('Delivery time'), _fmt(o.deliveryAt!, lang)),
             ]),
           ),
-        ]),
-        const SizedBox(height: 14),
-        Row(children: [
-          Text(money(o.total, currency, lang), style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800)),
-          const SizedBox(width: 10),
-          if (o.isExpress)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(6)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.bolt_rounded, size: 13, color: Colors.white),
-                Text(context.t('Express'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11)),
-              ]),
-            ),
-          const Spacer(),
-          Text('${o.items.length} ${context.t(o.items.length == 1 ? 'item' : 'items')}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-        ]),
+        ],
       ]),
     );
   }
+
+  Widget _panelRow(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(children: [
+          Text('$label :', style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w700, fontSize: 12.5)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(value,
+                textAlign: TextAlign.end,
+                style: TextStyle(color: AppColors.inkSoft, fontSize: 12.5, fontWeight: FontWeight.w500)),
+          ),
+        ]),
+      );
 
   Widget _readyBanner() {
     return Container(
@@ -424,16 +522,23 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       decoration: BoxDecoration(
         gradient: AppColors.goldGradient,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: AppShadows.glow(AppColors.gold),
+        boxShadow: AppShadows.glow(AppColors.goldDark),
       ),
       child: Row(children: [
-        const Icon(Icons.celebration_rounded, color: Colors.white, size: 24),
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.35), borderRadius: BorderRadius.circular(13)),
+          child: const Icon(Icons.celebration_rounded, color: AppColors.onGold, size: 23),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(context.t('Your order is ready!'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14.5)),
+            Text(context.t('Your order is ready!'),
+                style: const TextStyle(color: AppColors.onGold, fontWeight: FontWeight.w900, fontSize: 14.5)),
             const SizedBox(height: 2),
-            Text(context.t('Choose a delivery time below.'), style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
+            Text(context.t('Choose a delivery time below.'),
+                style: TextStyle(color: AppColors.onGold.withValues(alpha: 0.8), fontSize: 12.5, fontWeight: FontWeight.w500)),
           ]),
         ),
       ]),
@@ -445,7 +550,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final c = cancelled ? AppColors.danger : AppColors.warning;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: c.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(AppRadius.control)),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(AppRadius.control),
+        border: Border.all(color: c.withValues(alpha: 0.25)),
+      ),
       child: Row(children: [
         Icon(cancelled ? Icons.cancel_rounded : Icons.pause_circle_rounded, color: c),
         const SizedBox(width: 12),
@@ -457,43 +566,52 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
+  /// Claundry "My Bag" style item row: round thumb, name + unit line, qty badge, total.
   Widget _itemRow(OrderItem it, String currency, String lang) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _itemThumb(it.imageUrl),
-        const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(7)),
-          child: Text('${it.quantity}×', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 13)),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(it.serviceName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-            if (it.notes != null && it.notes!.trim().isNotEmpty)
-              Padding(padding: const EdgeInsets.only(top: 2), child: Text(it.notes!, style: TextStyle(color: AppColors.muted, fontSize: 12))),
-          ]),
-        ),
-        const SizedBox(width: 8),
-        Text(money(it.lineTotal, currency, lang), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-      ]),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: AppColors.surfaceAlt, borderRadius: BorderRadius.circular(AppRadius.control)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          _itemThumb(it.imageUrl),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(it.serviceName, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.ink)),
+              if (it.notes != null && it.notes!.trim().isNotEmpty)
+                Padding(padding: const EdgeInsets.only(top: 2), child: Text(it.notes!, style: TextStyle(color: AppColors.muted, fontSize: 12))),
+              const SizedBox(height: 3),
+              Text(money(it.lineTotal, currency, lang),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary)),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Text('×${it.quantity}', style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, fontSize: 13)),
+          ),
+        ]),
+      ),
     );
   }
 
   Widget _itemThumb(String? url) {
     final resolved = AppConfig.mediaUrl(url);
     final fallback = Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(9)),
-      child: Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 19),
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
+      child: const Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 21),
     );
     if (resolved == null) return fallback;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(9),
-      child: Image.network(resolved, width: 38, height: 38, fit: BoxFit.cover, errorBuilder: (_, _, _) => fallback),
+    return ClipOval(
+      child: Image.network(resolved, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, _, _) => fallback),
     );
   }
 
@@ -501,12 +619,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 }
 
 /// A collapsible card styled like the app's soft cards: a tappable header
-/// (title + rotating chevron) over an animated expand/collapse body.
+/// (icon tile + title + rotating chevron) over an animated expand/collapse body.
 class _AccordionSection extends StatefulWidget {
-  const _AccordionSection({required this.title, required this.child, this.initiallyExpanded = false});
+  const _AccordionSection({required this.title, required this.child, this.initiallyExpanded = false, this.icon});
   final String title;
   final Widget child;
   final bool initiallyExpanded;
+  final IconData? icon;
 
   @override
   State<_AccordionSection> createState() => _AccordionSectionState();
@@ -526,16 +645,30 @@ class _AccordionSectionState extends State<_AccordionSection> {
             borderRadius: BorderRadius.circular(AppRadius.card),
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
               child: Row(children: [
+                if (widget.icon != null) ...[
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(11)),
+                    child: Icon(widget.icon, color: AppColors.primary, size: 19),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: Text(widget.title,
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5, color: AppColors.ink)),
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.ink)),
                 ),
                 AnimatedRotation(
                   turns: _expanded ? 0.5 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.muted),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(color: AppColors.surfaceAlt, borderRadius: BorderRadius.circular(9)),
+                    child: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.muted, size: 20),
+                  ),
                 ),
               ]),
             ),
@@ -544,7 +677,7 @@ class _AccordionSectionState extends State<_AccordionSection> {
         AnimatedCrossFade(
           firstChild: const SizedBox(width: double.infinity, height: 0),
           secondChild: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: widget.child,
           ),
           crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,

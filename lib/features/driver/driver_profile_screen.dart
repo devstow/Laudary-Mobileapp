@@ -119,7 +119,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           if (snap.hasError) return ErrorView(ApiException.from(snap.error!).message, onRetry: () => setState(() => _future = _load()));
           final p = snap.data!;
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 116),
             children: [
               _headerCard(context, p),
               const SizedBox(height: 16),
@@ -128,7 +128,16 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                   key: _formKey,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(context.t('Contact & vehicle'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                    Row(children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(11)),
+                        child: const Icon(Icons.badge_rounded, color: AppColors.primary, size: 19),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(context.t('Contact & vehicle'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5, color: AppColors.ink)),
+                    ]),
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _name,
@@ -145,10 +154,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                     const SizedBox(height: 8),
                     Text(context.t('Contact your dispatcher to change your login email.'), style: TextStyle(color: AppColors.faint, fontSize: 12, fontStyle: FontStyle.italic)),
                     const SizedBox(height: 14),
-                    ElevatedButton(
-                      onPressed: _saving ? null : _save,
-                      child: _saving ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white)) : Text(context.t('Save changes')),
-                    ),
+                    PrimaryButton(label: context.t('Save changes'), busy: _saving, onPressed: _save, icon: Icons.check_rounded),
                   ]),
                 ),
               ),
@@ -179,20 +185,27 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     final initialsCircle = Container(
       width: 62, height: 62,
       alignment: Alignment.center,
-      decoration: BoxDecoration(gradient: AppColors.brandGradient, shape: BoxShape.circle),
-      child: Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22)),
+      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+      child: Text(initials, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 22)),
     );
     final url = p.photoUrl ?? '';
     final avatar = url.isEmpty
         ? initialsCircle
         : ClipOval(child: Image.network(url, width: 62, height: 62, fit: BoxFit.cover, errorBuilder: (_, _, _) => initialsCircle));
 
-    return SoftCard(
+    // Claundry driver card: blue gradient, white-ringed avatar, glass status chip.
+    return BrandHero(
+      padding: const EdgeInsets.all(18),
+      borderRadius: BorderRadius.circular(AppRadius.card + 2),
       child: Row(children: [
         GestureDetector(
           onTap: () => _onAvatarTap(p),
           child: Stack(children: [
-            avatar,
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.gold, width: 2.5)),
+              child: avatar,
+            ),
             Positioned(
               right: 0,
               bottom: 0,
@@ -209,16 +222,20 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         const SizedBox(width: 16),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(p.fullName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            Text(p.fullName, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
             if ((p.email ?? '').isNotEmpty) ...[
               const SizedBox(height: 2),
-              Text(p.email!, style: TextStyle(color: AppColors.muted, fontSize: 13)),
+              Text(p.email!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withValues(alpha: 0.82), fontSize: 13)),
             ],
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(color: statusColor().withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.chip)),
-              child: Text(context.t(p.status.label), style: TextStyle(color: statusColor(), fontWeight: FontWeight.w800, fontSize: 12)),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(AppRadius.chip)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(width: 7, height: 7, decoration: BoxDecoration(color: statusColor(), shape: BoxShape.circle)),
+                const SizedBox(width: 6),
+                Text(context.t(p.status.label), style: TextStyle(color: statusColor(), fontWeight: FontWeight.w800, fontSize: 12)),
+              ]),
             ),
           ]),
         ),
@@ -231,8 +248,6 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppRadius.card), border: Border.all(color: AppColors.line), boxShadow: AppShadows.soft),
       child: Column(children: [
         _tile(context, Icons.lock_outline, context.t('Change password'), onTap: _changePassword),
-        const Divider(height: 1),
-        _tile(context, Icons.storefront_rounded, context.t('Change laundry'), subtitle: app.tenantName, onTap: () => context.read<AppState>().changeLaundry()),
         const Divider(height: 1),
         _langTile(context, app),
         const Divider(height: 1),

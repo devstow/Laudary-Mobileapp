@@ -146,28 +146,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
               future: _future,
               builder: (context, snap) {
                 final p = snap.data;
+                // Centered Claundry-style profile header: title, ringed avatar, name, email, chips.
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Row(children: [
-                      _avatar(p, name),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(
-                            name.isEmpty ? context.t('Profile') : name,
-                            style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -0.3),
-                          ),
-                          if (email.isNotEmpty) ...[
-                            const SizedBox(height: 3),
-                            Text(email, style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13.5)),
-                          ],
-                        ]),
+                    Text(context.t('Account'),
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.gold, width: 2.5),
                       ),
-                    ]),
+                      child: _avatar(p, name),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      name.isEmpty ? context.t('Profile') : name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: -0.3),
+                    ),
+                    if (email.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(email,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13.5)),
+                    ],
                     if (p != null && ((p.phone?.isNotEmpty ?? false) || (p.city?.isNotEmpty ?? false))) ...[
-                      const SizedBox(height: 16),
-                      Wrap(spacing: 8, runSpacing: 8, children: [
+                      const SizedBox(height: 14),
+                      Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
                         if (p.phone?.isNotEmpty ?? false) _HeroChip(icon: Icons.phone_rounded, label: p.phone!),
                         if (p.city?.isNotEmpty ?? false) _HeroChip(icon: Icons.location_city_rounded, label: p.city!),
                       ]),
@@ -180,7 +188,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Padding(
             // Bottom inset clears the translucent bottom nav bar (HomeShell uses extendBody: true), so the
             // last tile — Logout — is never hidden behind it. Matches the dashboard/payments tabs (100).
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 100),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 116),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SectionHeader(context.t('Default pickup address')),
               const SizedBox(height: 12),
@@ -251,13 +259,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: _changePassword,
                 ),
                 const _TileDivider(),
-                _Tile(
-                  icon: Icons.storefront_rounded,
-                  title: context.t('Change laundry'),
-                  subtitle: app.tenantName,
-                  onTap: () => context.read<AppState>().changeLaundry(),
-                ),
-                const _TileDivider(),
                 _LangTile(current: lang, onChange: (c) => context.read<AppState>().setLanguage(c)),
                 const _TileDivider(),
                 _AppearanceTile(current: app.theme.mode, onChange: (m) => context.read<AppState>().setThemeMode(m)),
@@ -325,7 +326,7 @@ class _Group extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: AppColors.lineSoft),
         boxShadow: AppShadows.soft,
       ),
       clipBehavior: Clip.antiAlias,
@@ -342,10 +343,9 @@ class _TileDivider extends StatelessWidget {
 }
 
 class _Tile extends StatelessWidget {
-  const _Tile({required this.icon, required this.title, this.subtitle, this.onTap, this.danger = false});
+  const _Tile({required this.icon, required this.title, this.onTap, this.danger = false});
   final IconData icon;
   final String title;
-  final String? subtitle;
   final VoidCallback? onTap;
   final bool danger;
   @override
@@ -369,10 +369,6 @@ class _Tile extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(title, style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 15)),
-                if (subtitle != null && subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(subtitle!, style: TextStyle(color: AppColors.muted, fontSize: 12.5), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
               ]),
             ),
             if (onTap != null) Icon(Icons.chevron_right_rounded, color: danger ? AppColors.danger.withValues(alpha: 0.6) : AppColors.faint),

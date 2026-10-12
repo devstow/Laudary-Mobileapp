@@ -4,7 +4,7 @@ import 'config.dart';
 import 'token_store.dart';
 
 /// Thin wrapper around Dio that:
-///  - attaches `X-Tenant-Id` (selected laundry) + `Authorization: Bearer` + `Accept-Language`,
+///  - attaches `Authorization: Bearer` + `Accept-Language` (the tenant comes from the JWT),
 ///  - transparently refreshes the access token on a 401 and retries once,
 ///  - signals the app to sign out when the refresh token is also dead.
 class ApiClient {
@@ -19,8 +19,6 @@ class ApiClient {
 
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final tenant = await _store.tenant;
-        if (tenant != null) options.headers['X-Tenant-Id'] = tenant;
         final token = await _store.accessToken;
         if (token != null && options.headers['Authorization'] == null) {
           options.headers['Authorization'] = 'Bearer $token';
@@ -51,16 +49,11 @@ class ApiClient {
 
   Future<Response?> _tryRefreshAndReplay(RequestOptions original) async {
     final refresh = await _store.refreshToken;
-    final tenant = await _store.tenant;
-    if (refresh == null || tenant == null) return null;
+    if (refresh == null) return null;
 
     // Bare Dio (no interceptors) to avoid recursion.
     final bare = Dio(BaseOptions(baseUrl: AppConfig.apiBaseUrl, validateStatus: (s) => s != null && s < 500));
-    final res = await bare.post(
-      '/api/auth/refresh',
-      data: {'refreshToken': refresh},
-      options: Options(headers: {'X-Tenant-Id': tenant}),
-    );
+    final res = await bare.post('/api/auth/refresh', data: {'refreshToken': refresh});
     if (res.statusCode != 200 || res.data is! Map) return null;
 
     final data = res.data as Map;

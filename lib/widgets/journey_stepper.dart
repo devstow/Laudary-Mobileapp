@@ -84,7 +84,7 @@ class _StageRow extends StatelessWidget {
         : current
             ? AppColors.gold
             : AppColors.line;
-    final iconColor = (done || current) ? Colors.white : AppColors.faint;
+    final iconColor = done ? Colors.white : (current ? AppColors.onGold : AppColors.faint);
     final connectorColor = done ? AppColors.primary : AppColors.line;
 
     return IntrinsicHeight(
@@ -99,7 +99,7 @@ class _StageRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: nodeColor,
                   shape: BoxShape.circle,
-                  boxShadow: current ? AppShadows.glow(AppColors.gold) : null,
+                  boxShadow: current ? AppShadows.glow(AppColors.goldDark) : null,
                   border: current ? Border.all(color: AppColors.goldSoft, width: 3) : null,
                 ),
                 child: Icon(done ? Icons.check_rounded : stage.icon, size: 19, color: iconColor),

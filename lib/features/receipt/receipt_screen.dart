@@ -43,7 +43,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       case OrderReceiptStatus.paid:
         return (bg: const Color(0xFF16A34A), fg: Colors.white);
       case OrderReceiptStatus.issued:
-        return (bg: AppColors.gold, fg: Colors.white);
+        return (bg: AppColors.gold, fg: AppColors.onGold);
       case OrderReceiptStatus.voided:
         return (bg: AppColors.danger, fg: Colors.white);
       case OrderReceiptStatus.pending:

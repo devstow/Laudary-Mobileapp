@@ -1,7 +1,7 @@
-/// One laundry in the public directory (GET /api/public/tenants).
+/// One laundry in the public directory (GET /api/public/tenants, GET /api/public/tenants/{id}).
 class TenantDirectoryItem {
   TenantDirectoryItem({
-    required this.identifier,
+    required this.id,
     required this.name,
     this.logoUrl,
     this.address,
@@ -13,7 +13,8 @@ class TenantDirectoryItem {
     this.primaryColor,
   });
 
-  final String identifier;
+  /// Tenant id (GUID) — sent as `tenantId` on registration / email+phone checks.
+  final String id;
   final String name;
   final String? logoUrl;
   final String? address;
@@ -28,8 +29,8 @@ class TenantDirectoryItem {
   String get displayName => (appName != null && appName!.isNotEmpty) ? appName! : name;
 
   factory TenantDirectoryItem.fromJson(Map<String, dynamic> j) => TenantDirectoryItem(
-        identifier: j['identifier'] as String,
-        name: j['name'] as String? ?? j['identifier'] as String,
+        id: j['id'] as String,
+        name: (j['name'] as String?) ?? '',
         logoUrl: j['logoUrl'] as String?,
         address: j['address'] as String?,
         countryCode: j['countryCode'] as String?,
@@ -38,5 +39,19 @@ class TenantDirectoryItem {
         appName: j['appName'] as String?,
         tagline: j['tagline'] as String?,
         primaryColor: j['primaryColor'] as String?,
+      );
+}
+
+/// One business offered by a 409 TenantSelectionRequired login response.
+class TenantChoice {
+  TenantChoice({required this.tenantId, required this.name, this.logoUrl});
+  final String tenantId;
+  final String name;
+  final String? logoUrl;
+
+  factory TenantChoice.fromJson(Map<String, dynamic> j) => TenantChoice(
+        tenantId: j['tenantId'] as String,
+        name: (j['name'] as String?) ?? '',
+        logoUrl: j['logoUrl'] as String?,
       );
 }

@@ -77,15 +77,27 @@ void main() {
     expect(p2.statusCounts[OrderStatus.delivered], 1);
   });
 
-  test('TenantDirectoryItem.fromJson', () {
+  test('TenantDirectoryItem.fromJson (id, no identifier)', () {
     final t = TenantDirectoryItem.fromJson({
-      'identifier': 'nimbus',
+      'id': '3804a8bb-a646-4185-89ff-f1097412152f',
       'name': 'Nimbus Cleaners',
+      'logoUrl': null,
       'defaultLanguage': 'ar',
       'defaultCurrency': 'SAR',
+      'appName': 'Nimbus',
     });
-    expect(t.identifier, 'nimbus');
+    expect(t.id, '3804a8bb-a646-4185-89ff-f1097412152f');
+    expect(t.name, 'Nimbus Cleaners');
+    expect(t.displayName, 'Nimbus');
     expect(t.defaultLanguage, 'ar');
+    expect(t.defaultCurrency, 'SAR');
+  });
+
+  test('TenantChoice.fromJson (409 TenantSelectionRequired item)', () {
+    final c = TenantChoice.fromJson({'tenantId': 'abc', 'name': 'Bravo Cleaners', 'logoUrl': '/uploads/x.png'});
+    expect(c.tenantId, 'abc');
+    expect(c.name, 'Bravo Cleaners');
+    expect(c.logoUrl, '/uploads/x.png');
   });
 
   group('OrderDetail action gating', () {

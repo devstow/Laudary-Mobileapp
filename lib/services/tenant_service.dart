@@ -2,7 +2,8 @@ import '../core/api_client.dart';
 import '../models/tenant.dart';
 import 'api_exception.dart';
 
-/// Public "find your laundry" directory (anonymous — no tenant/token needed).
+/// Public laundry directory (anonymous). Used by the registration flow ("choose your laundry")
+/// and to load the signed-in user's branding.
 class TenantService {
   TenantService(this._api);
   final ApiClient _api;
@@ -14,5 +15,13 @@ class TenantService {
     });
     if (!isOk(res)) throw ApiException.from(res);
     return (res.data as List).map((e) => TenantDirectoryItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// One operational laundry by id; null when not found / not operational (404).
+  Future<TenantDirectoryItem?> get(String id) async {
+    final res = await _api.dio.get('/api/public/tenants/$id');
+    if (res.statusCode == 404) return null;
+    if (!isOk(res)) throw ApiException.from(res);
+    return TenantDirectoryItem.fromJson(res.data as Map<String, dynamic>);
   }
 }

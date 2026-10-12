@@ -6,6 +6,7 @@ import 'app.dart';
 import 'core/api_client.dart';
 import 'core/token_store.dart';
 import 'l10n/l10n.dart';
+import 'services/ai_service.dart';
 import 'services/auth_service.dart';
 import 'services/delivery_service.dart';
 import 'services/driver_profile_service.dart';
@@ -39,6 +40,7 @@ void main() {
         Provider<DeliveryService>(create: (_) => DeliveryService(api)),
         Provider<DriverProfileService>(create: (_) => DriverProfileService(api)),
         Provider<NotificationService>(create: (_) => NotificationService(api)),
+        Provider<AiService>(create: (_) => AiService(api)),
         ChangeNotifierProvider<LocaleController>.value(value: locale),
         ChangeNotifierProvider<ThemeController>.value(value: theme),
         ChangeNotifierProvider<AppState>.value(value: appState),

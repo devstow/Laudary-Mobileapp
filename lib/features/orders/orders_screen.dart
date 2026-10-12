@@ -134,15 +134,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(context.t('My Orders')),
-        actions: [_typeMenu()],
       ),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: Column(
           children: [
             _searchBar(),
             _statusBar(),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Expanded(child: _list()),
           ],
         ),
@@ -150,16 +150,42 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
+  /// The amber square filter button beside the search box (Claundry style) — opens the
+  /// existing service-type menu.
   Widget _typeMenu() {
+    final active = _type != null;
     return PopupMenuButton<OrderType?>(
       tooltip: context.t('Service type'),
-      icon: Icon(Icons.tune_rounded, color: _type == null ? AppColors.ink : AppColors.primary),
       onSelected: _setType,
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.control)),
       itemBuilder: (context) => [
         _typeItem(null, context.t('All types')),
         _typeItem(OrderType.pickupAndDelivery, context.t('Pickup & Delivery')),
         _typeItem(OrderType.walkIn, context.t('Walk-in')),
       ],
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          gradient: AppColors.goldGradient,
+          borderRadius: BorderRadius.circular(AppRadius.control),
+          boxShadow: AppShadows.glow(AppColors.goldDark),
+        ),
+        child: Stack(alignment: Alignment.center, children: [
+          const Icon(Icons.tune_rounded, color: AppColors.onGold, size: 22),
+          if (active)
+            PositionedDirectional(
+              top: 9,
+              end: 9,
+              child: Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle, border: Border.all(color: AppColors.gold, width: 1.5)),
+              ),
+            ),
+        ]),
+      ),
     );
   }
 
@@ -175,36 +201,46 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Widget _searchBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: _onSearchChanged,
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: context.t('Search order number'),
-          prefixIcon: const Icon(Icons.search_rounded),
-          isDense: true,
-          suffixIcon: _q.isEmpty
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: () {
-                    _searchCtrl.clear();
-                    _q = '';
-                    _load(reset: true);
-                  },
-                ),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
+      child: Row(children: [
+        Expanded(
+          child: DecoratedBox(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.control), boxShadow: AppShadows.soft),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: _onSearchChanged,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: context.t('Search order number'),
+                prefixIcon: const Icon(Icons.search_rounded),
+                fillColor: AppColors.surface,
+                suffixIcon: _q.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          _q = '';
+                          _load(reset: true);
+                        },
+                      ),
+              ),
+            ),
+          ),
         ),
-      ),
+        const SizedBox(width: 10),
+        _typeMenu(),
+      ]),
     );
   }
 
   Widget _statusBar() {
     return SizedBox(
-      height: 40,
+      height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+        clipBehavior: Clip.none,
         itemCount: _statusFilters.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
@@ -219,6 +255,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
     );
   }
+
+  // Leaves room for the floating bottom bar when this screen is a Home tab.
+  static const _bottomPad = 116.0;
 
   Widget _list() {
     if (_loading) return const Padding(padding: EdgeInsets.fromLTRB(20, 8, 20, 0), child: SkeletonList());
@@ -236,7 +275,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       onRefresh: () => _load(reset: true),
       child: ListView.separated(
         controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 6, 20, _bottomPad),
         itemCount: _items.length + 1,
         separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, i) {

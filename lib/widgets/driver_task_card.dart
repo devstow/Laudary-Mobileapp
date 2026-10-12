@@ -96,8 +96,8 @@ class DriverTaskCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
                     margin: const EdgeInsetsDirectional.only(end: 6),
-                    decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(6)),
-                    child: Text('$stopNumber', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11)),
+                    decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(6)),
+                    child: Text('$stopNumber', style: const TextStyle(color: AppColors.onGold, fontWeight: FontWeight.w900, fontSize: 11)),
                   ),
                 ],
                 Flexible(child: Text(task.orderNumber ?? '—', overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.ink))),
@@ -335,8 +335,8 @@ class _MiniJourney extends StatelessWidget {
       Container(
         width: 30,
         height: 30,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle, boxShadow: active ? AppShadows.glow(AppColors.gold) : null),
-        child: Icon(done ? Icons.check_rounded : _icons[i], size: 15, color: (done || active) ? Colors.white : AppColors.faint),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle, boxShadow: active ? AppShadows.glow(AppColors.goldDark) : null),
+        child: Icon(done ? Icons.check_rounded : _icons[i], size: 15, color: done ? Colors.white : (active ? AppColors.onGold : AppColors.faint)),
       ),
       const SizedBox(height: 3),
       SizedBox(

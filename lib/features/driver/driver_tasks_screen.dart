@@ -239,7 +239,7 @@ class _DriverTasksScreenState extends State<DriverTasksScreen> {
       onRefresh: () => _load(reset: true),
       child: ListView.separated(
         controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 6, 20, 116),
         itemCount: _items.length + 1,
         separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, i) {

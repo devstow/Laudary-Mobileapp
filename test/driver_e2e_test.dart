@@ -41,8 +41,6 @@ void main() {
   final profile = DriverProfileService(api);
 
   test('Driver journey end-to-end against the live API', () async {
-    await store.setTenant('nimbus', 'Nimbus Cleaners', currency: 'USD');
-
     // 1. Driver login → roleKinds contains 5 (Driver).
     final res = await auth.login('driver@nimbus.local', 'Nimbus@123');
     expect(res.user.isDriver, isTrue, reason: 'driver login carries RoleKind.Driver (5)');

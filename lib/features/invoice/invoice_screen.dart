@@ -39,7 +39,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       case OrderInvoiceStatus.pending:
         return (bg: const Color(0xFF2563EB), fg: Colors.white);
       case OrderInvoiceStatus.pendingPayment:
-        return (bg: AppColors.gold, fg: Colors.white);
+        return (bg: AppColors.gold, fg: AppColors.onGold);
       case OrderInvoiceStatus.voided:
         return (bg: AppColors.danger, fg: Colors.white);
       case OrderInvoiceStatus.draft:
@@ -69,6 +69,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             children: [
               BrandHero(
                 padding: const EdgeInsets.all(20),
+                borderRadius: BorderRadius.circular(AppRadius.card + 2),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(inv.tenantName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
                   if (inv.branchName != null && inv.branchName!.isNotEmpty)

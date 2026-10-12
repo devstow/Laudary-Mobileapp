@@ -120,35 +120,89 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
+  /// Claundry "card" visual: a blue gradient wallet card with the outstanding balance
+  /// up top and billed / paid underneath.
   Widget _summary(String lang) {
     final cur = context.read<AppState>().currency; // tenant currency, like the web
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
-      child: SoftCard(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
-        child: Row(children: [
-          Expanded(child: _stat(context.t('Billed'), money(_billed, cur, lang), AppColors.ink)),
-          _divider(),
-          Expanded(child: _stat(context.t('Paid'), money(_paid, cur, lang), AppColors.success)),
-          _divider(),
-          Expanded(child: _stat(context.t('Outstanding'), money(_outstanding, cur, lang), AppColors.danger)),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: AppColors.brandGradient,
+          borderRadius: BorderRadius.circular(AppRadius.card + 2),
+          boxShadow: AppShadows.glow(AppColors.primary),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(children: [
+          PositionedDirectional(end: -40, top: -50, child: _ring(170)),
+          PositionedDirectional(end: 40, bottom: -70, child: _ring(130)),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  width: 38,
+                  height: 30,
+                  decoration: BoxDecoration(gradient: AppColors.goldGradient, borderRadius: BorderRadius.circular(7)),
+                  child: const Icon(Icons.account_balance_wallet_rounded, color: AppColors.onGold, size: 18),
+                ),
+                const Spacer(),
+                Text(context.t('Payments'),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontWeight: FontWeight.w800, fontSize: 13)),
+              ]),
+              const SizedBox(height: 18),
+              Text(context.t('Outstanding'),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12.5, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(money(_outstanding, cur, lang),
+                    style: const TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: -0.4)),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(AppRadius.control)),
+                child: Row(children: [
+                  Expanded(child: _stat(context.t('Billed'), money(_billed, cur, lang))),
+                  Container(width: 1, height: 30, color: Colors.white.withValues(alpha: 0.25)),
+                  const SizedBox(width: 14),
+                  Expanded(child: _stat(context.t('Paid'), money(_paid, cur, lang))),
+                ]),
+              ),
+            ]),
+          ),
         ]),
       ),
     );
   }
 
-  Widget _divider() => Container(width: 1, height: 40, color: AppColors.line);
+  static Widget _ring(double size) => IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 16),
+          ),
+        ),
+      );
 
-  Widget _stat(String label, String value, Color color) => Column(children: [
-        Text(value, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5, color: color)),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(color: AppColors.muted, fontSize: 12)),
+  Widget _stat(String label, String value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11.5, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 2),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+        ),
       ]);
 
   Widget _paymentBar() {
     String label(PaymentStatus? p) => p == null ? context.t('All') : context.t(p.label);
     return SizedBox(
-      height: 40,
+      height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -177,7 +231,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       );
     }
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 100),
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 116),
       sliver: SliverList.separated(
         itemCount: _items.length + 1,
         separatorBuilder: (_, _) => const SizedBox(height: 12),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/enums.dart';
-import '../../theme/app_theme.dart';
+import '../../widgets/floating_nav_bar.dart';
 import 'driver_dashboard_screen.dart';
 import 'driver_profile_screen.dart';
 import 'driver_tasks_screen.dart';
@@ -40,16 +40,15 @@ class _DriverShellState extends State<DriverShell> {
     ];
 
     return Scaffold(
+      extendBody: true,
       body: IndexedStack(index: _index, children: tabs),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primarySoft,
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home_rounded), label: context.t('Home')),
-          NavigationDestination(icon: const Icon(Icons.local_shipping_outlined), selectedIcon: const Icon(Icons.local_shipping_rounded), label: context.t('Tasks')),
-          NavigationDestination(icon: const Icon(Icons.person_outline_rounded), selectedIcon: const Icon(Icons.person_rounded), label: context.t('Account')),
+      bottomNavigationBar: FloatingNavBar(
+        index: _index,
+        onSelect: (i) => setState(() => _index = i),
+        items: [
+          NavItem(Icons.home_outlined, Icons.home_rounded, context.t('Home')),
+          NavItem(Icons.local_shipping_outlined, Icons.local_shipping_rounded, context.t('Tasks')),
+          NavItem(Icons.person_outline_rounded, Icons.person_rounded, context.t('Account')),
         ],
       ),
     );

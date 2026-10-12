@@ -2,9 +2,12 @@ import 'package:dio/dio.dart';
 
 /// A friendly error extracted from a ProblemDetails / validation response.
 class ApiException implements Exception {
-  ApiException(this.message, {this.statusCode});
+  ApiException(this.message, {this.statusCode, this.title});
   final String message;
   final int? statusCode;
+
+  /// ProblemDetails `title` (machine-readable code such as "TenantSelectionInvalid"), when present.
+  final String? title;
 
   @override
   String toString() => message;
@@ -23,7 +26,9 @@ class ApiException implements Exception {
   static ApiException _fromResponse(Response res) {
     final data = res.data;
     String msg = 'Something went wrong.';
+    String? title;
     if (data is Map) {
+      if (data['title'] is String) title = data['title'] as String;
       // Validation problem: { errors: { Field: [messages] } }
       final errors = data['errors'];
       if (errors is Map && errors.isNotEmpty) {
@@ -37,7 +42,7 @@ class ApiException implements Exception {
         msg = data['message'] as String;
       }
     }
-    return ApiException(msg, statusCode: res.statusCode);
+    return ApiException(msg, statusCode: res.statusCode, title: title);
   }
 }
 

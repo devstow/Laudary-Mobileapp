@@ -57,11 +57,11 @@ class TrackStepper extends StatelessWidget {
     final done = state == _S.done;
     final active = state == _S.active;
     final nodeColor = done
-        ? AppColors.success
+        ? AppColors.primary
         : active
-            ? AppColors.primary
-            : AppColors.line;
-    final iconColor = (done || active) ? Colors.white : AppColors.faint;
+            ? AppColors.gold
+            : AppColors.lineSoft;
+    final iconColor = done ? Colors.white : (active ? AppColors.onGold : AppColors.faint);
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,13 +73,13 @@ class TrackStepper extends StatelessWidget {
               decoration: BoxDecoration(
                 color: nodeColor,
                 shape: BoxShape.circle,
-                boxShadow: active ? AppShadows.glow(AppColors.primary) : null,
-                border: active ? Border.all(color: AppColors.primarySoft, width: 3) : null,
+                boxShadow: active ? AppShadows.glow(AppColors.goldDark) : null,
+                border: active ? Border.all(color: AppColors.goldSoft, width: 3) : Border.all(color: done ? AppColors.primary : AppColors.line),
               ),
               child: Icon(done ? Icons.check_rounded : step.icon, size: 18, color: iconColor),
             ),
             if (!isLast)
-              Expanded(child: Container(width: 2.5, margin: const EdgeInsets.symmetric(vertical: 2), color: done ? AppColors.success : AppColors.line)),
+              Expanded(child: Container(width: 2.5, margin: const EdgeInsets.symmetric(vertical: 2), color: done ? AppColors.primary : AppColors.line)),
           ]),
           const SizedBox(width: 14),
           Expanded(

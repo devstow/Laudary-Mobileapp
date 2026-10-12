@@ -26,6 +26,8 @@ class _TrackScreenState extends State<TrackScreen> {
   String? _error;
   OrderTracking? _result;
   bool _notFound = false;
+  String? _numberError;
+  String? _phoneError;
 
   @override
   void dispose() {
@@ -36,13 +38,17 @@ class _TrackScreenState extends State<TrackScreen> {
 
   Future<void> _track() async {
     final n = _number.text.trim();
-    if (n.isEmpty) return;
+    final phone = _phone.text.trim();
+    // Both are required: the phone on the order identifies it (and guards against enumeration).
+    setState(() {
+      _numberError = n.isEmpty ? context.t('Enter your order number.') : null;
+      _phoneError = phone.isEmpty ? context.t('Enter the phone number used on the order.') : null;
+    });
+    if (_numberError != null || _phoneError != null) return;
     FocusScope.of(context).unfocus();
     setState(() { _busy = true; _error = null; _result = null; _notFound = false; });
     try {
-      final tenant = context.read<AppState>().tenantIdentifier!;
-      final phone = _phone.text.trim();
-      final r = await context.read<OrderService>().track(tenant: tenant, number: n, phone: phone.isEmpty ? null : phone);
+      final r = await context.read<OrderService>().track(number: n, phone: phone);
       setState(() { _result = r; _notFound = r == null; });
     } catch (e) {
       setState(() => _error = ApiException.from(e).message);
@@ -61,58 +67,95 @@ class _TrackScreenState extends State<TrackScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           children: [
-            SoftCard(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(AppRadius.control)),
-                      child: const Icon(Icons.local_shipping_rounded, color: AppColors.primary, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(context.t('Track your order'), style: Theme.of(context).textTheme.titleMedium),
-                          const SizedBox(height: 2),
-                          Text(context.t('Enter your order number to see live status'),
-                              style: TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                        ],
+            // Blue lookup card (Claundry delivery-card look) with white inputs + amber CTA.
+            Container(
+              decoration: BoxDecoration(
+                gradient: AppColors.brandGradient,
+                borderRadius: BorderRadius.circular(AppRadius.card + 2),
+                boxShadow: AppShadows.glow(AppColors.primary),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(children: [
+                PositionedDirectional(
+                  end: -50,
+                  top: -50,
+                  child: IgnorePointer(
+                    child: Container(
+                      width: 170,
+                      height: 170,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 16),
                       ),
                     ),
-                  ]),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _number,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(hintText: context.t('Order number'), prefixIcon: const Icon(Icons.tag_rounded)),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _phone,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _track(),
-                    decoration: InputDecoration(
-                      hintText: context.t('Phone (optional)'),
-                      prefixIcon: const Icon(Icons.phone_outlined),
-                    ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(14)),
+                          child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 23),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(context.t('Track your order'),
+                                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 2),
+                              Text(context.t('Enter your order number and phone to see live status'),
+                                  style: TextStyle(color: Colors.white.withValues(alpha: 0.82), fontSize: 12.5, height: 1.3)),
+                            ],
+                          ),
+                        ),
+                      ]),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _number,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) { if (_numberError != null) setState(() => _numberError = null); },
+                        decoration: InputDecoration(
+                          hintText: context.t('Order number'),
+                          prefixIcon: const Icon(Icons.tag_rounded),
+                          errorText: _numberError,
+                          fillColor: AppColors.surface,
+                          errorStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _phone,
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) => _track(),
+                        onChanged: (_) { if (_phoneError != null) setState(() => _phoneError = null); },
+                        decoration: InputDecoration(
+                          hintText: context.t('Phone'),
+                          prefixIcon: const Icon(Icons.phone_outlined),
+                          errorText: _phoneError,
+                          fillColor: AppColors.surface,
+                          errorStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      PrimaryButton(
+                        amber: true,
+                        busy: _busy,
+                        onPressed: _track,
+                        icon: Icons.search_rounded,
+                        label: context.t('Track order'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _busy ? null : _track,
-                    icon: _busy
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                        : const Icon(Icons.search_rounded, size: 20),
-                    label: Text(context.t('Track order')),
-                  ),
-                ],
-              ),
+                ),
+              ]),
             ),
             const SizedBox(height: 18),
             if (_error != null) ErrorView(_error!, onRetry: _track),
@@ -120,7 +163,7 @@ class _TrackScreenState extends State<TrackScreen> {
               EmptyView(
                 context.t('Order not found'),
                 icon: Icons.search_off_rounded,
-                hint: context.t('Check the order number and try again'),
+                hint: context.t('Check the order number and phone, then try again'),
               ),
             if (_result != null) _TrackResult(_result!, lang: lang),
           ],
@@ -148,6 +191,13 @@ class _TrackResult extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    margin: const EdgeInsetsDirectional.only(end: 12),
+                    decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(14)),
+                    child: Icon(statusIcon(data.status), color: Colors.white, size: 22),
+                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,7 +248,11 @@ class _TrackResult extends StatelessWidget {
     final c = cancelled ? AppColors.danger : AppColors.warning;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: c.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(AppRadius.card)),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: c.withValues(alpha: 0.25)),
+      ),
       child: Row(children: [
         Icon(cancelled ? Icons.cancel_rounded : Icons.pause_circle_rounded, color: c),
         const SizedBox(width: 12),

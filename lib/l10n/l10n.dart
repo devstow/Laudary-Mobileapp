@@ -20,10 +20,10 @@ class AppStrings {
   AppStrings._();
 
   static const Map<String, String> _ar = {
-    'Find your laundry': 'اختر مغسلتك',
+    'Choose your laundry': 'اختر مغسلتك',
     'Search laundries': 'ابحث عن مغسلة',
     'Continue': 'متابعة',
-    'Select a laundry to continue': 'اختر مغسلة للمتابعة',
+    'Select the laundry you want to join': 'اختر المغسلة التي تريد الانضمام إليها',
     'No laundries found': 'لا توجد مغاسل',
     'Login': 'تسجيل الدخول',
     'Welcome back': 'مرحباً بعودتك',
@@ -36,7 +36,11 @@ class AppStrings {
     'Full name': 'الاسم الكامل',
     'Phone': 'الهاتف',
     'Already have an account?': 'لديك حساب بالفعل؟',
-    'Change laundry': 'تغيير المغسلة',
+    'Sign in to continue': 'سجّل الدخول للمتابعة',
+    'Choose your business': 'اختر نشاطك التجاري',
+    'Your account belongs to more than one business. Choose which one to sign in to.':
+        'حسابك مرتبط بأكثر من نشاط تجاري. اختر النشاط الذي تريد تسجيل الدخول إليه.',
+    'Your sign-in session expired. Please sign in again.': 'انتهت صلاحية جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.',
     'Home': 'الرئيسية',
     'Orders': 'الطلبات',
     'Track': 'التتبع',
@@ -47,6 +51,10 @@ class AppStrings {
     'No orders yet': 'لا توجد طلبات بعد',
     'Book a pickup': 'حجز استلام',
     'Track your order': 'تتبع طلبك',
+    'Enter your order number and phone to see live status': 'أدخل رقم الطلب ورقم الهاتف لمعرفة حالته المباشرة',
+    'Enter your order number.': 'أدخل رقم الطلب.',
+    'Enter the phone number used on the order.': 'أدخل رقم الهاتف المستخدم في الطلب.',
+    'Check the order number and phone, then try again': 'تحقق من رقم الطلب ورقم الهاتف ثم حاول مرة أخرى',
     'Order number': 'رقم الطلب',
     'Track order': 'تتبع الطلب',
     'Order not found': 'لم يتم العثور على الطلب',
@@ -386,6 +394,24 @@ class AppStrings {
     'Code sent to': 'أُرسل الرمز إلى',
     '(dev) code:': '(تطوير) الرمز:',
     'Resend code': 'إعادة إرسال الرمز',
+    // ── UI redesign (2026-10-08) ──
+    'Fresh laundry, picked up & delivered': 'غسيل نظيف، نستلمه ونوصله إليك',
+    'Quick actions': 'إجراءات سريعة',
+    'Overview': 'نظرة عامة',
+    'Book now': 'احجز الآن',
+    // ── AI assistant ──
+    'AI Assistant': 'المساعد الذكي',
+    'History': 'السجل',
+    'Clear chat': 'مسح المحادثة',
+    'Hi! Ask me about your data — I answer from live information you are allowed to see.': 'مرحباً! اسألني عن بياناتك — أجيب من المعلومات المباشرة المسموح لك برؤيتها.',
+    'Ask about your data…': 'اسأل عن بياناتك…',
+    'Confirm': 'تأكيد',
+    'Cancel': 'إلغاء',
+    'Okay — nothing was changed.': 'حسناً — لم يتم تغيير أي شيء.',
+    'Sorry, that action failed. Nothing was changed. Please try again or do it from the screen.': 'عذراً، فشل هذا الإجراء ولم يتغير شيء. حاول مرة أخرى أو نفّذه من الشاشة.',
+    "This screen isn't available in the app.": 'هذه الشاشة غير متاحة في التطبيق.',
+    'No conversations yet.': 'لا توجد محادثات بعد.',
+    'Loading…': 'جارٍ التحميل…',
   };
 
   static String get(String key, String lang) => lang == 'ar' ? (_ar[key] ?? key) : key;

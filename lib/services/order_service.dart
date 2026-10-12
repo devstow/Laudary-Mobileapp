@@ -150,12 +150,10 @@ class OrderService {
     return res.data!;
   }
 
-  /// GET /api/track — public tracking (anonymous). Needs the tenant identifier explicitly.
-  Future<OrderTracking?> track({required String tenant, required String number, String? phone}) async {
-    final params = <String, dynamic>{'tenant': tenant, 'number': number};
-    if (phone != null && phone.isNotEmpty) params['phone'] = phone;
-
-    final res = await _api.dio.get('/api/track', queryParameters: params);
+  /// GET /api/track — public tracking (anonymous). Order number + the phone on the order
+  /// (contact or customer phone) are both required; null when no match (404).
+  Future<OrderTracking?> track({required String number, required String phone}) async {
+    final res = await _api.dio.get('/api/track', queryParameters: {'number': number, 'phone': phone});
     if (res.statusCode == 404) return null;
     if (!isOk(res)) throw ApiException.from(res);
     return OrderTracking.fromJson(res.data as Map<String, dynamic>);

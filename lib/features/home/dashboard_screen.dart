@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/l10n.dart';
+import '../../models/ai.dart';
 import '../../models/enums.dart';
 import '../../models/order.dart';
 import '../../services/api_exception.dart';
@@ -13,6 +14,7 @@ import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/order_card.dart';
 import '../../widgets/ui.dart';
+import '../assistant/assistant_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../orders/orders_screen.dart';
 import '../track/track_screen.dart';
@@ -94,6 +96,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     final app = context.watch<AppState>();
     final name = (app.user?.fullName ?? '').split(' ').first;
 
+    void openTrack() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrackScreen()));
+    void openOrders() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen()));
+
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -103,16 +108,44 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             return ListView(
               padding: EdgeInsets.zero,
               children: [
-                _Header(name: name, tenant: app.tenantName ?? '', logoUrl: app.tenantLogoUrl, unread: _unread, onBell: _openNotifications),
+                _Header(
+                  name: name,
+                  fullName: app.user?.fullName ?? '',
+                  tenant: app.tenantName ?? '',
+                  logoUrl: app.tenantLogoUrl,
+                  unread: _unread,
+                  onBell: _openNotifications,
+                ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                  child: _PromoBanner(onTap: widget.onNewPickup),
+                ),
+                const SizedBox(height: 22),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SectionHeader(context.t('Quick actions')),
+                    const SizedBox(height: 12),
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: _CategoryTile(icon: Icons.add_box_rounded, label: context.t('Book a pickup'), highlight: true, onTap: widget.onNewPickup)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _CategoryTile(icon: Icons.travel_explore_rounded, label: context.t('Track'), onTap: openTrack)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _CategoryTile(icon: Icons.receipt_long_rounded, label: context.t('My Orders'), onTap: openOrders)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _CategoryTile(icon: Icons.notifications_active_rounded, label: context.t('Alerts'), onTap: _openNotifications, badge: _unread)),
+                    ]),
+                  ]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 120),
                   child: Builder(builder: (context) {
                     if (snap.connectionState == ConnectionState.waiting) {
-                      return const Padding(padding: EdgeInsets.only(top: 8), child: SkeletonList(count: 3));
+                      return const SkeletonList(count: 3);
                     }
                     if (snap.hasError) {
                       return Padding(
-                        padding: const EdgeInsets.only(top: 40),
+                        padding: const EdgeInsets.only(top: 16),
                         child: ErrorView(ApiException.from(snap.error!).message, onRetry: _refresh),
                       );
                     }
@@ -125,42 +158,26 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // KPI grid
-                        Row(children: [
-                          Expanded(child: _Kpi(icon: Icons.pending_actions_rounded, color: AppColors.info, value: '${_active(p)}', label: context.t('Active orders'))),
-                          const SizedBox(width: 12),
-                          Expanded(child: _Kpi(icon: Icons.local_laundry_service_rounded, color: AppColors.warning, value: '${_count(p, {OrderStatus.pickedUp, OrderStatus.atFacility, OrderStatus.inProcess})}', label: context.t('In cleaning'))),
-                        ]),
+                        SectionHeader(context.t('Overview')),
                         const SizedBox(height: 12),
-                        Row(children: [
-                          Expanded(child: _Kpi(icon: Icons.check_circle_rounded, color: AppColors.primary, value: '${_count(p, {OrderStatus.ready, OrderStatus.outForDelivery})}', label: context.t('Ready / on the way'))),
-                          const SizedBox(width: 12),
-                          Expanded(child: _Kpi(icon: Icons.receipt_long_rounded, color: AppColors.gold, value: '${p.allCount}', label: context.t('Total orders'))),
-                        ]),
-                        const SizedBox(height: 18),
-
-                        _BookPickupCta(onTap: widget.onNewPickup),
-                        const SizedBox(height: 14),
-
-                        // Quick actions
-                        Row(children: [
-                          Expanded(child: _QuickAction(icon: Icons.travel_explore_rounded, label: context.t('Track'), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrackScreen())))),
-                          const SizedBox(width: 12),
-                          Expanded(child: _QuickAction(icon: Icons.notifications_none_rounded, label: context.t('Alerts'), onTap: _openNotifications)),
-                          const SizedBox(width: 12),
-                          Expanded(child: _QuickAction(icon: Icons.receipt_long_outlined, label: context.t('My Orders'), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen())))),
+                        _StatsCard(stats: [
+                          _Stat(Icons.pending_actions_rounded, AppColors.info, '${_active(p)}', context.t('Active orders')),
+                          _Stat(Icons.local_laundry_service_rounded, AppColors.warning,
+                              '${_count(p, {OrderStatus.pickedUp, OrderStatus.atFacility, OrderStatus.inProcess})}', context.t('In cleaning')),
+                          _Stat(Icons.check_circle_rounded, AppColors.primary,
+                              '${_count(p, {OrderStatus.ready, OrderStatus.outForDelivery})}', context.t('Ready / on the way')),
+                          _Stat(Icons.receipt_long_rounded, AppColors.goldDark, '${p.allCount}', context.t('Total orders')),
                         ]),
                         const SizedBox(height: 24),
-
                         SectionHeader(context.t('Active orders'),
                             actionLabel: p.allCount > activeOrders.length ? context.t('View all') : null,
-                            onAction: p.allCount > activeOrders.length
-                                ? () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen()))
-                                : null),
+                            onAction: p.allCount > activeOrders.length ? openOrders : null),
                         const SizedBox(height: 12),
                         if (activeOrders.isEmpty)
-                          EmptyView(context.t('No active orders'),
-                              icon: Icons.local_laundry_service_rounded, hint: context.t('Book a pickup to get started'))
+                          SoftCard(
+                            child: EmptyView(context.t('No active orders'),
+                                icon: Icons.local_laundry_service_rounded, hint: context.t('Book a pickup to get started')),
+                          )
                         else
                           ...activeOrders.map((o) => Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
@@ -183,72 +200,97 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   }
 }
 
+/// Greeting row (Claundry home header): avatar, name + business, bell.
 class _Header extends StatelessWidget {
-  const _Header({required this.name, required this.tenant, required this.unread, required this.onBell, this.logoUrl});
+  const _Header({
+    required this.name,
+    required this.fullName,
+    required this.tenant,
+    required this.unread,
+    required this.onBell,
+    this.logoUrl,
+  });
   final String name;
+  final String fullName;
   final String tenant;
   final int unread;
   final VoidCallback onBell;
   final String? logoUrl;
+
   @override
   Widget build(BuildContext context) {
     final hasLogo = logoUrl != null && logoUrl!.isNotEmpty;
-    return BrandHero(
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 14, 20, 26),
+    final words = fullName.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2);
+    final initials = words.isEmpty ? '?' : words.map((w) => w[0].toUpperCase()).join();
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 14, 20, 18),
       child: Row(
         children: [
-          if (hasLogo) ...[
-            Container(
-              width: 40, height: 40, padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.95), borderRadius: BorderRadius.circular(11)),
-              child: Image.network(logoUrl!, fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 22)),
-            ),
-            const SizedBox(width: 12),
-          ],
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(16)),
+            alignment: Alignment.center,
+            child: Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${context.t('Hello')}${name.isEmpty ? '' : ', $name'} 👋',
-                    style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: AppColors.ink, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
                 const SizedBox(height: 3),
                 Row(children: [
-                  const Icon(Icons.storefront_rounded, color: Colors.white70, size: 15),
-                  const SizedBox(width: 5),
-                  Flexible(child: Text(tenant, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 13.5))),
+                  if (hasLogo)
+                    Container(
+                      width: 16,
+                      height: 16,
+                      margin: const EdgeInsetsDirectional.only(end: 5),
+                      child: Image.network(logoUrl!, fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Icon(Icons.storefront_rounded, color: AppColors.primary, size: 15)),
+                    )
+                  else
+                    const Padding(
+                      padding: EdgeInsetsDirectional.only(end: 5),
+                      child: Icon(Icons.storefront_rounded, color: AppColors.primary, size: 15),
+                    ),
+                  Flexible(
+                    child: Text(tenant,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppColors.muted, fontSize: 13, fontWeight: FontWeight.w500)),
+                  ),
                 ]),
               ],
             ),
           ),
+          const SizedBox(width: 10),
+          const AssistantButton(pageContext: AiPageContext(module: 'dashboard')),
           Stack(
             clipBehavior: Clip.none,
             children: [
-              Material(
-                color: Colors.white.withValues(alpha: 0.18),
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: onBell,
-                  child: const Padding(padding: EdgeInsets.all(11), child: Icon(Icons.notifications_none_rounded, color: Colors.white, size: 24)),
-                ),
-              ),
+              SquareIconButton(icon: Icons.notifications_none_rounded, onTap: onBell, tooltip: context.t('Notifications')),
               if (unread > 0)
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                    decoration: BoxDecoration(
-                      color: AppColors.danger,
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(color: AppColors.primaryDark, width: 1.5),
-                    ),
-                    child: Text(
-                      unread > 9 ? '9+' : '$unread',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, height: 1.1),
+                PositionedDirectional(
+                  end: -4,
+                  top: -4,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.canvas, width: 2),
+                      ),
+                      child: Text(
+                        unread > 9 ? '9+' : '$unread',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, height: 1.25),
+                      ),
                     ),
                   ),
                 ),
@@ -260,87 +302,195 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _Kpi extends StatelessWidget {
-  const _Kpi({required this.icon, required this.color, required this.value, required this.label});
-  final IconData icon;
-  final Color color;
-  final String value;
-  final String label;
-  @override
-  Widget build(BuildContext context) {
-    return SoftCard(
-      padding: const EdgeInsets.all(15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.13), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 19),
-            ),
-            const Spacer(),
-            Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
-          ]),
-          const SizedBox(height: 8),
-          Text(label, style: TextStyle(color: AppColors.muted, fontSize: 12.5, height: 1.2)),
-        ],
-      ),
-    );
-  }
-}
-
-class _BookPickupCta extends StatelessWidget {
-  const _BookPickupCta({required this.onTap});
+/// Blue promo card with an amber "Book now" (the reference's discount banner,
+/// repurposed for the real "Book a pickup" action).
+class _PromoBanner extends StatelessWidget {
+  const _PromoBanner({required this.onTap});
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
+    final rtl = Directionality.of(context) == TextDirection.rtl;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(18),
+        height: 156,
         decoration: BoxDecoration(
-          gradient: AppColors.goldGradient,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          boxShadow: AppShadows.glow(AppColors.gold),
+          gradient: AppColors.brandGradient,
+          borderRadius: BorderRadius.circular(AppRadius.card + 2),
+          boxShadow: AppShadows.glow(AppColors.primary),
         ),
-        child: Row(children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(13)),
-            child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 25),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(children: [
+          // Washing-machine door illustration built from rings.
+          PositionedDirectional(
+            end: -26,
+            top: -10,
+            child: Container(
+              width: 176,
+              height: 176,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.10),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.22), width: 2),
+              ),
+              alignment: Alignment.center,
+              child: Container(
+                width: 116,
+                height: 116,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.55), width: 8),
+                ),
+                child: const Icon(Icons.local_laundry_service_rounded, color: Colors.white, size: 46),
+              ),
+            ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(context.t('Book a pickup'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16.5)),
-              const SizedBox(height: 2),
-              Text(context.t('We collect, clean & deliver'), style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
-            ]),
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(20, 18, 150, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(context.t('Book a pickup'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: -0.3)),
+                const SizedBox(height: 4),
+                Text(context.t('We collect, clean & deliver'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13, height: 1.3)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(10)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(context.t('Book now'),
+                        style: const TextStyle(color: AppColors.onGold, fontWeight: FontWeight.w800, fontSize: 13)),
+                    const SizedBox(width: 4),
+                    Icon(rtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded, color: AppColors.onGold, size: 16),
+                  ]),
+                ),
+              ],
+            ),
           ),
-          const Icon(Icons.arrow_forward_rounded, color: Colors.white),
         ]),
       ),
     );
   }
 }
 
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.icon, required this.label, required this.onTap});
+/// Bordered square tile with an icon + label (the reference's "Categories" row).
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({required this.icon, required this.label, required this.onTap, this.highlight = false, this.badge = 0});
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool highlight;
+  final int badge;
+
   @override
   Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.tile),
+        onTap: onTap,
+        child: Column(children: [
+          AspectRatio(
+            aspectRatio: 1,
+            child: Stack(clipBehavior: Clip.none, children: [
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: highlight ? AppColors.primarySoft : AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.tile),
+                    border: Border.all(color: highlight ? AppColors.primary.withValues(alpha: 0.45) : AppColors.line, width: 1.3),
+                    boxShadow: AppShadows.soft,
+                  ),
+                  child: Icon(icon, color: AppColors.primary, size: 28),
+                ),
+              ),
+              if (badge > 0)
+                PositionedDirectional(
+                  end: 6,
+                  top: 6,
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle),
+                  ),
+                ),
+            ]),
+          ),
+          const SizedBox(height: 7),
+          Text(label,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, height: 1.2, color: AppColors.inkSoft)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _Stat {
+  const _Stat(this.icon, this.color, this.value, this.label);
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
+}
+
+/// One card holding the four order counters in a 2x2 grid.
+class _StatsCard extends StatelessWidget {
+  const _StatsCard({required this.stats});
+  final List<_Stat> stats;
+  @override
+  Widget build(BuildContext context) {
+    Widget cell(_Stat s) => Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: s.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+              child: Icon(s.icon, color: s.color, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(s.value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink, height: 1.1)),
+                const SizedBox(height: 2),
+                Text(s.label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: AppColors.muted, fontSize: 11.5, height: 1.2)),
+              ]),
+            ),
+          ]),
+        );
+
     return SoftCard(
-      onTap: onTap,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      padding: EdgeInsets.zero,
       child: Column(children: [
-        Icon(icon, color: AppColors.primary, size: 24),
-        const SizedBox(height: 8),
-        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: AppColors.ink)),
+        IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: cell(stats[0])),
+            VerticalDivider(width: 1, color: AppColors.lineSoft),
+            Expanded(child: cell(stats[1])),
+          ]),
+        ),
+        Divider(height: 1, color: AppColors.lineSoft),
+        IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: cell(stats[2])),
+            VerticalDivider(width: 1, color: AppColors.lineSoft),
+            Expanded(child: cell(stats[3])),
+          ]),
+        ),
       ]),
     );
   }

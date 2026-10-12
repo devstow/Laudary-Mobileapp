@@ -303,8 +303,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               Container(
                 width: 46,
                 height: 46,
-                decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(13)),
-                child: const Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 24),
+                decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.add_rounded, color: Colors.white, size: 26),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -324,11 +324,18 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: SoftCard(
-                padding: const EdgeInsets.all(13),
+                padding: const EdgeInsets.all(12),
                 child: Row(children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
+                    child: const Icon(Icons.local_laundry_service_rounded, color: AppColors.primary, size: 21),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(s.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                      Text(s.name, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: AppColors.ink)),
                       const SizedBox(height: 3),
                       Text('${money(s.basePrice, currency, lang)} / ${context.t(s.unit.label)}  ·  ${context.t('Line total')} ${money(s.basePrice * e.value, currency, lang)}',
                           style: TextStyle(color: AppColors.muted, fontSize: 12.5)),
@@ -455,24 +462,39 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   }
 
   Widget _bottomBar(String lang, String currency) {
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-        decoration: BoxDecoration(color: AppColors.surface, border: Border(top: BorderSide(color: AppColors.line))),
-        child: Row(children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text('${context.t('Estimated')} · $_serviceCount ${context.t(_serviceCount == 1 ? 'service' : 'services')}',
-                style: TextStyle(color: AppColors.muted, fontSize: 12)),
-            Text(money(_estimate, currency, lang), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19, color: AppColors.ink)),
-          ]),
-          const SizedBox(width: 16),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: _busy ? null : () => _review(lang, currency),
-              child: _busy
-                  ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                  : Text(context.t('Review & confirm')),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+        boxShadow: AppShadows.card,
+      ),
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.shopping_basket_rounded, color: AppColors.primary, size: 20),
             ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('$_serviceCount ${context.t(_serviceCount == 1 ? 'service' : 'services')}',
+                  style: TextStyle(color: AppColors.inkSoft, fontSize: 14, fontWeight: FontWeight.w700)),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(context.t('Estimated'), style: TextStyle(color: AppColors.muted, fontSize: 11.5)),
+              Text(money(_estimate, currency, lang),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.primary)),
+            ]),
+          ]),
+          const SizedBox(height: 12),
+          PrimaryButton(
+            label: context.t('Review & confirm'),
+            busy: _busy,
+            icon: Icons.arrow_forward_rounded,
+            onPressed: () => _review(lang, currency),
           ),
         ]),
       ),
@@ -520,7 +542,16 @@ class _ConfirmSheet extends StatelessWidget {
                 decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
               ),
             ),
-            Text(context.t('Confirm your pickup'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            Row(children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(13)),
+                child: const Icon(Icons.fact_check_rounded, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(context.t('Confirm your pickup'), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.ink))),
+            ]),
             const SizedBox(height: 16),
             Text(context.t('Services').toUpperCase(),
                 style: TextStyle(color: AppColors.muted, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
@@ -557,10 +588,10 @@ class _ConfirmSheet extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 flex: 2,
-                child: ElevatedButton.icon(
+                child: PrimaryButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  icon: const Icon(Icons.check_rounded),
-                  label: Text(confirmLabel),
+                  icon: Icons.check_rounded,
+                  label: confirmLabel,
                 ),
               ),
             ]),

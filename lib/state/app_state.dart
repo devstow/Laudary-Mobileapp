@@ -9,12 +9,14 @@ import '../l10n/l10n.dart';
 import '../models/auth.dart';
 import '../models/tenant.dart';
 import '../services/auth_service.dart';
+import '../services/tenant_service.dart';
 import 'theme_controller.dart';
 
-enum AppStatus { bootstrapping, tenantNeeded, loggedOut, loggedIn }
+enum AppStatus { bootstrapping, loggedOut, loggedIn }
 
-/// Central session state: which laundry is selected + who is signed in, and the
-/// top-level flow the app should show.
+/// Central session state: who is signed in, their laundry's branding, and the top-level flow
+/// the app should show. The laundry (tenant) is never chosen before login — it comes from the
+/// signed-in user's JWT (`tid`); the directory is only used to load that laundry's branding.
 class AppState extends ChangeNotifier {
   AppState({
     required this.api,
@@ -22,7 +24,7 @@ class AppState extends ChangeNotifier {
     required this.auth,
     required this.locale,
     required this.theme,
-  }) {
+  }) : _tenants = TenantService(api) {
     api.onSessionExpired = _onSessionExpired;
   }
 
@@ -31,12 +33,12 @@ class AppState extends ChangeNotifier {
   final AuthService auth;
   final LocaleController locale;
   final ThemeController theme;
+  final TenantService _tenants;
 
   AppStatus status = AppStatus.bootstrapping;
-  String? tenantIdentifier;
   String? tenantName;
   /// Tenant branding (dynamic, from the tenant's Appearance & Branding settings) — shown on the
-  /// login/dashboard/profile chrome so each laundry sees its own logo + name.
+  /// dashboard/profile chrome so each laundry sees its own logo + name. Null → SmartWash default.
   String? tenantLogoUrl;
   String? tenantAppName;
   /// The tenant's configured currency (Settings › Currency) — used to format ALL money in the
@@ -44,7 +46,7 @@ class AppState extends ChangeNotifier {
   String currency = 'SAR';
   AuthUser? user;
 
-  /// Display name for branding — tenant app name, else business name.
+  /// Display name for branding — tenant app name, else business name, else SmartWash.
   String get brandName => (tenantAppName != null && tenantAppName!.isNotEmpty) ? tenantAppName! : (tenantName ?? 'SmartWash');
   bool get hasLogo => tenantLogoUrl != null && tenantLogoUrl!.isNotEmpty;
 
@@ -55,82 +57,70 @@ class AppState extends ChangeNotifier {
     final savedTheme = await store.themeMode;
     theme.setMode(ThemeController.parse(savedTheme));
 
-    tenantIdentifier = await store.tenant;
-    tenantName = await store.tenantName;
-    tenantLogoUrl = await store.tenantLogoUrl;
-    tenantAppName = await store.tenantAppName;
-    currency = await store.tenantCurrency ?? 'SAR';
-    if (tenantIdentifier == null) {
-      _set(AppStatus.tenantNeeded);
-      return;
-    }
     final token = await store.accessToken;
     // Restore the signed-in user from the stored token so a resumed session keeps
     // the customer's name/identity (the greeting, etc.) without needing a fresh login.
     if (token != null) user = AuthUser.fromJwt(token);
-    _set(token == null ? AppStatus.loggedOut : AppStatus.loggedIn);
-    // Refresh the tenant's configured currency from the public directory (best-effort) so the
-    // app always formats money in the tenant currency — even for installs that predate this,
-    // or if the tenant changed its currency. Mirrors the web's central currency provider.
-    unawaited(_refreshTenantCurrency(tenantIdentifier!));
+    if (token == null || user == null) {
+      await store.clearAll();
+      user = null;
+      _set(AppStatus.loggedOut);
+      return;
+    }
+    tenantName = await store.tenantName;
+    tenantLogoUrl = await store.tenantLogoUrl;
+    tenantAppName = await store.tenantAppName;
+    currency = await store.tenantCurrency ?? 'SAR';
+    _set(AppStatus.loggedIn);
+    // Refresh the laundry's CURRENT branding + currency (best-effort, never blocks the UI).
+    unawaited(_refreshBranding(user!.tenantId));
   }
 
-  // Best-effort refresh of the tenant's CURRENT branding + currency from the public directory, so the
-  // app always shows the latest logo/app-name/currency even if the tenant changed them after selection.
-  Future<void> _refreshTenantCurrency(String identifier) async {
+  /// Best-effort load of the signed-in laundry's branding + currency from the public directory.
+  /// A 404 (platform tenant / not operational) or any error falls back to SmartWash defaults.
+  Future<void> _refreshBranding(String tenantId) async {
+    if (tenantId.isEmpty) return;
     try {
-      final res = await api.dio.get('/api/public/tenants/$identifier');
-      if (res.statusCode == 200 && res.data is Map) {
-        final d = res.data as Map;
-        final cur = (d['defaultCurrency'] as String?)?.trim();
-        final logo = (d['logoUrl'] as String?)?.trim();
-        final appName = (d['appName'] as String?)?.trim();
-        var changed = false;
-        if (cur != null && cur.isNotEmpty && cur != currency) { currency = cur; changed = true; }
-        if (logo != tenantLogoUrl) { tenantLogoUrl = logo; changed = true; }
-        if (appName != tenantAppName) { tenantAppName = appName; changed = true; }
-        if (changed) {
-          await store.setTenant(identifier, tenantName ?? identifier, currency: currency, logoUrl: logo, appName: appName);
-          notifyListeners();
-        }
+      final t = await _tenants.get(tenantId);
+      if (user?.tenantId != tenantId) return; // signed out / switched meanwhile
+      if (t == null) {
+        _applyBranding(null, null, null, 'SAR');
+        await store.clearBranding();
+      } else {
+        _applyBranding(t.name, t.logoUrl, t.appName, t.defaultCurrency);
+        await store.setBranding(name: t.name, currency: t.defaultCurrency, logoUrl: t.logoUrl, appName: t.appName);
       }
-    } catch (_) {/* best-effort */}
+      notifyListeners();
+    } catch (_) {/* best-effort: keep cached/default branding */}
   }
 
-  Future<void> selectTenant(TenantDirectoryItem item) async {
-    await store.setTenant(item.identifier, item.name,
-        currency: item.defaultCurrency, logoUrl: item.logoUrl, appName: item.appName);
-    tenantIdentifier = item.identifier;
-    tenantName = item.name;
-    tenantLogoUrl = item.logoUrl;
-    tenantAppName = item.appName;
-    currency = item.defaultCurrency;
-    _set(AppStatus.loggedOut);
+  void _applyBranding(String? name, String? logo, String? appName, String cur) {
+    tenantName = name;
+    tenantLogoUrl = (logo != null && logo.trim().isNotEmpty) ? logo.trim() : null;
+    tenantAppName = (appName != null && appName.trim().isNotEmpty) ? appName.trim() : null;
+    currency = cur.trim().isEmpty ? 'SAR' : cur.trim();
   }
 
-  Future<void> changeLaundry() async {
-    await store.clearAll();
-    tenantIdentifier = null;
-    tenantName = null;
-    tenantLogoUrl = null;
-    tenantAppName = null;
-    currency = 'SAR';
-    user = null;
-    _set(AppStatus.tenantNeeded);
-  }
-
-  Future<void> onAuthenticated(AuthResult result) async {
+  /// Signed in (login, business choice or registration). [tenant] — the directory item the user
+  /// just registered with — seeds the branding immediately; otherwise it loads in the background.
+  Future<void> onAuthenticated(AuthResult result, {TenantDirectoryItem? tenant}) async {
     await store.setTokens(result.accessToken, result.refreshToken);
     user = result.user;
+    if (tenant != null && tenant.id == result.user.tenantId) {
+      _applyBranding(tenant.name, tenant.logoUrl, tenant.appName, tenant.defaultCurrency);
+      await store.setBranding(name: tenant.name, currency: tenant.defaultCurrency, logoUrl: tenant.logoUrl, appName: tenant.appName);
+    } else {
+      _applyBranding(null, null, null, 'SAR');
+      await store.clearBranding();
+      unawaited(_refreshBranding(result.user.tenantId));
+    }
     _set(AppStatus.loggedIn);
   }
 
   Future<void> logout() async {
     final rt = await store.refreshToken;
     if (rt != null) await auth.logout(rt);
-    await store.clearTokens();
-    user = null;
-    _set(AppStatus.loggedOut);
+    await _signedOut();
   }
 
   Future<void> setLanguage(String code) async {
@@ -143,9 +133,13 @@ class AppState extends ChangeNotifier {
     await store.setThemeMode(theme.code);
   }
 
-  void _onSessionExpired() {
-    store.clearTokens();
+  void _onSessionExpired() => unawaited(_signedOut());
+
+  // The next sign-in may be a different business, so drop the cached branding too.
+  Future<void> _signedOut() async {
+    await store.clearAll();
     user = null;
+    _applyBranding(null, null, null, 'SAR');
     _set(AppStatus.loggedOut);
   }
 

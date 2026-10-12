@@ -3,6 +3,10 @@
 //
 // Run:  flutter test test/api_e2e_test.dart --dart-define=API_BASE_URL=http://localhost:5014
 // (the API must be running first).
+//
+// Contract under test (no X-Tenant-Id anywhere — the tenant comes from the JWT after login):
+//   directory (id) → register { …, tenantId } → login { email, password } → … →
+//   public track ?number=&phone= ; plus the 409 TenantSelectionRequired → select-tenant path.
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -11,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobileapp/core/api_client.dart';
 import 'package:mobileapp/core/token_store.dart';
 import 'package:mobileapp/models/profile.dart';
+import 'package:mobileapp/services/api_exception.dart';
 import 'package:mobileapp/services/auth_service.dart';
 import 'package:mobileapp/services/notification_service.dart';
 import 'package:mobileapp/services/order_service.dart';
@@ -48,37 +53,54 @@ void main() {
   final notifications = NotificationService(api);
 
   test('Customer journey end-to-end against the live API', () async {
-    // --- 1. Public tenant directory (anonymous) ---
+    await store.clearAll();
+
+    // --- 1. Public tenant directory (anonymous) — items carry `id`, no identifier ---
     final list = await tenants.list();
     expect(list, isNotEmpty, reason: 'tenant directory should return laundries');
-    final nimbus = list.firstWhere((t) => t.identifier == 'nimbus');
-    expect(nimbus.name, isNotEmpty);
-    await store.setTenant(nimbus.identifier, nimbus.name);
+    // Prefer the Nimbus demo laundry; fall back to the first operational one if it isn't listed.
+    final nimbus = list.firstWhere((t) => t.name == 'Nimbus Cleaners', orElse: () => list.first);
+    expect(nimbus.id, isNotEmpty);
+    final one = await tenants.get(nimbus.id);
+    expect(one?.id, nimbus.id);
     // ignore: avoid_print
-    print('✓ directory: ${list.length} laundries; selected ${nimbus.identifier}');
+    print('✓ directory: ${list.length} laundries; chose ${nimbus.name} (${nimbus.id})');
 
-    // --- 2. Register a fresh customer (tenant-scoped) ---
+    // --- 2. Register a fresh customer into the chosen laundry (tenantId in the body) ---
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final email = 'e2e$ts@nimbus.local';
+    final email = 'e2e$ts@e2e.local';
     final phone = '+9665${(ts % 100000000).toString().padLeft(8, '0')}';
-    final reg = await auth.register(fullName: 'E2E Tester', email: email, password: 'Passw0rd!', phone: phone);
+    final reg = await auth.register(
+        tenantId: nimbus.id, fullName: 'E2E Tester', email: email, password: 'Passw0rd!', phone: phone);
     expect(reg.user.isCustomer, isTrue, reason: 'self-registered user is a Customer');
-    await store.setTokens(reg.accessToken, reg.refreshToken);
+    expect(reg.user.tenantId, nimbus.id, reason: 'registered into the chosen laundry');
     // ignore: avoid_print
-    print('✓ register+login: $email (roleKinds=${reg.user.roleKinds})');
+    print('✓ register: $email (roleKinds=${reg.user.roleKinds})');
 
-    // --- 3. Services catalog for the booking screen ---
+    // --- 3. Login with credentials ONLY (no tenant) ---
+    final login = await auth.login(email, 'Passw0rd!');
+    expect(login.user.tenantId, nimbus.id, reason: 'tenant resolved server-side from the account');
+    expect(login.user.isCustomer, isTrue);
+    await store.setTokens(login.accessToken, login.refreshToken);
+    // Branding for the signed-in laundry comes from the directory by user.tenantId.
+    final brand = await tenants.get(login.user.tenantId);
+    expect(brand?.name, nimbus.name);
+    // ignore: avoid_print
+    print('✓ login (credentials only): tenantId=${login.user.tenantId}; branding=${brand?.displayName}');
+
+    // --- 4. Services catalog for the booking screen ---
     final services = await orders.services();
     expect(services, isNotEmpty, reason: 'services list drives "book a pickup"');
     // ignore: avoid_print
     print('✓ services: ${services.length} (${services.first.name} @ ${services.first.basePrice} ${services.first.currency})');
 
-    // --- 4. Book a pickup ---
+    // --- 5. Book a pickup ---
+    const contactPhone = '+966500000000';
     final pickupAt = DateTime.now().add(const Duration(hours: 3));
     final orderId = await orders.bookPickup(
       pickupAt: pickupAt,
       pickupAddress: 'King Fahd Rd, Riyadh',
-      contactPhone: '+966500000000',
+      contactPhone: contactPhone,
       notes: 'Please handle with care',
       items: [(serviceId: services.first.id, quantity: 2, notes: null)],
     );
@@ -86,14 +108,14 @@ void main() {
     // ignore: avoid_print
     print('✓ book pickup: order $orderId');
 
-    // --- 5. My orders now shows it ---
+    // --- 6. My orders now shows it ---
     final page = await orders.myOrders();
     expect(page.allCount, greaterThanOrEqualTo(1));
     expect(page.items.any((o) => o.id == orderId), isTrue);
     // ignore: avoid_print
     print('✓ my orders: allCount=${page.allCount}');
 
-    // --- 6. Order detail + timeline (self-scoped) ---
+    // --- 7. Order detail + timeline (self-scoped) ---
     final detail = await orders.detail(orderId);
     expect(detail.orderNumber, isNotEmpty);
     expect(detail.items, isNotEmpty);
@@ -103,12 +125,12 @@ void main() {
     // ignore: avoid_print
     print('✓ detail ${detail.orderNumber}: ${detail.items.length} items, total ${detail.total} ${detail.currency}; timeline=${timeline.length}');
 
-    // --- 7. Reschedule the pickup ---
+    // --- 8. Reschedule the pickup ---
     await orders.reschedulePickup(orderId, DateTime.now().add(const Duration(days: 1)));
     // ignore: avoid_print
     print('✓ reschedule pickup: ok');
 
-    // --- 8. Profile get + update round-trip ---
+    // --- 9. Profile get + update round-trip ---
     final p0 = await profile.get();
     expect(p0.fullName, isNotEmpty);
     await profile.update(CustomerProfile(
@@ -119,18 +141,91 @@ void main() {
     // ignore: avoid_print
     print('✓ profile: "${p0.fullName}" -> city=${p1.city}');
 
-    // --- 9. Notifications feed reachable ---
+    // --- 10. Notifications feed reachable ---
     final unread = await notifications.unreadCount();
     final all = await notifications.all();
     expect(unread, greaterThanOrEqualTo(0));
     // ignore: avoid_print
     print('✓ notifications: unread=$unread, total=${all.length}');
 
-    // --- 10. Public tracking by order number ---
-    final tracked = await orders.track(tenant: nimbus.identifier, number: detail.orderNumber);
+    // --- 11. Public tracking: order number + phone (both required, no tenant) ---
+    final tracked = await orders.track(number: detail.orderNumber, phone: contactPhone);
     expect(tracked, isNotNull);
     expect(tracked!.orderNumber, detail.orderNumber);
+    final wrongPhone = await orders.track(number: detail.orderNumber, phone: '+966511111111');
+    expect(wrongPhone, isNull, reason: 'a non-matching phone must not reveal the order');
     // ignore: avoid_print
-    print('✓ track ${tracked.orderNumber}: status=${tracked.status.label}, timeline=${tracked.timeline.length}');
+    print('✓ track ${tracked.orderNumber}: status=${tracked.status.label}, timeline=${tracked.timeline.length}; wrong phone → not found');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  test('Same credentials in two laundries → 409 choose business → select-tenant', () async {
+    await store.clearAll();
+
+    final list = await tenants.list();
+    expect(list.length, greaterThanOrEqualTo(2), reason: 'needs two operational laundries in the directory');
+    final a = list[0];
+    final b = list[1];
+
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final email = 'multi$ts@e2e.local';
+    const password = 'Passw0rd!';
+    await auth.register(tenantId: a.id, fullName: 'Multi Tenant', email: email, password: password);
+    await auth.register(tenantId: b.id, fullName: 'Multi Tenant', email: email, password: password);
+    // ignore: avoid_print
+    print('✓ registered $email into "${a.name}" and "${b.name}"');
+
+    // Login → the server can't pick for us → TenantSelectionRequired with both businesses.
+    TenantSelectionRequired? choice;
+    try {
+      await auth.login(email, password);
+    } on TenantSelectionRequired catch (e) {
+      choice = e;
+    }
+    expect(choice, isNotNull, reason: 'login must answer 409 TenantSelectionRequired');
+    expect(choice!.selectionToken, isNotEmpty);
+    final offered = choice.tenants.map((t) => t.tenantId).toSet();
+    expect(offered, containsAll([a.id, b.id]));
+    expect(choice.tenants.every((t) => t.name.isNotEmpty), isTrue);
+    // ignore: avoid_print
+    print('✓ login → 409: ${choice.tenants.map((t) => t.name).join(' | ')}');
+
+    // Choose the second laundry → AuthResponse for exactly that tenant.
+    final res = await auth.selectTenant(selectionToken: choice.selectionToken, tenantId: b.id);
+    expect(res.user.tenantId, b.id);
+    expect(res.accessToken, isNotEmpty);
+    // ignore: avoid_print
+    print('✓ select-tenant → signed in to "${b.name}" (tenantId=${res.user.tenantId})');
+
+    // A bogus selection token is rejected with 401 TenantSelectionInvalid.
+    try {
+      await auth.selectTenant(selectionToken: 'not-a-valid-token', tenantId: b.id);
+      fail('select-tenant with a bad token must fail');
+    } on ApiException catch (e) {
+      expect(e.statusCode, 401);
+      expect(e.title, 'TenantSelectionInvalid');
+      // ignore: avoid_print
+      print('✓ bad selection token → 401 ${e.title}');
+    }
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  test('Password reset by OTP — email only, no tenant field', () async {
+    await store.clearAll();
+    final list = await tenants.list();
+    final t = list.first;
+    final email = 'otp${DateTime.now().millisecondsSinceEpoch}@e2e.local';
+    await auth.register(tenantId: t.id, fullName: 'OTP Tester', email: email, password: 'Passw0rd!');
+
+    final devCode = await auth.requestPasswordOtp(email: email);
+    if (devCode == null) {
+      // ignore: avoid_print
+      print('• OTP reset: requested (no devCode — server not in Development)');
+      return;
+    }
+    await auth.verifyOtp(email: email, code: devCode);
+    await auth.resetPasswordWithOtp(email: email, code: devCode, newPassword: 'N3wPassw0rd!');
+    final again = await auth.login(email, 'N3wPassw0rd!');
+    expect(again.user.tenantId, t.id);
+    // ignore: avoid_print
+    print('✓ OTP reset: request → verify → reset → login with new password');
   }, timeout: const Timeout(Duration(minutes: 2)));
 }

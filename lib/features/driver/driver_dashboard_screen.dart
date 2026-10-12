@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/l10n.dart';
+import '../../models/ai.dart';
 import '../../models/delivery.dart';
 import '../../models/enums.dart';
 import '../../models/notification.dart';
@@ -15,6 +16,7 @@ import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/driver_task_card.dart';
 import '../../widgets/ui.dart';
+import '../assistant/assistant_screen.dart';
 import '../notifications/notifications_screen.dart';
 import 'driver_task_detail_screen.dart';
 import 'geofence.dart';
@@ -112,7 +114,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
                 _header(context, name, DateFormat('EEEE, dd MMM', lang).format(DateTime.now()),
                     snap.data?.activeCount ?? 0),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 116),
                   child: Builder(builder: (context) {
                     if (snap.connectionState == ConnectionState.waiting) {
                       return const Padding(padding: EdgeInsets.only(top: 8), child: SkeletonList(count: 3));
@@ -173,38 +175,79 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
   }
 
   Widget _header(BuildContext context, String name, String dateStr, int active) {
+    final fullName = context.read<AppState>().user?.fullName ?? '';
+    final words = fullName.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2);
+    final initials = words.isEmpty ? '?' : words.map((w) => w[0].toUpperCase()).join();
     return BrandHero(
       padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 14, 20, 26),
-      child: Row(children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${context.t('Hello')}${name.isEmpty ? '' : ', $name'} 👋',
-                style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
-            const SizedBox(height: 3),
-            Text('$dateStr · $active ${context.t('active stop(s)')}', style: const TextStyle(color: Colors.white70, fontSize: 13.5)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 6))],
+            ),
+            alignment: Alignment.center,
+            child: Text(initials, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 17)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${context.t('Hello')}${name.isEmpty ? '' : ', $name'} 👋',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+              const SizedBox(height: 2),
+              Text(dateStr, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          const AssistantButton(onDark: true, pageContext: AiPageContext(module: 'driver_home')),
+          Stack(clipBehavior: Clip.none, children: [
+            SquareIconButton(icon: Icons.notifications_none_rounded, onTap: _openNotifications, onDark: true, tooltip: context.t('Notifications')),
+            if (_unread > 0)
+              PositionedDirectional(
+                end: -4,
+                top: -4,
+                child: IgnorePointer(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
+                    decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.primaryDark, width: 2)),
+                    child: Text(_unread > 9 ? '9+' : '$_unread',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.onGold, fontSize: 10, fontWeight: FontWeight.w900, height: 1.25)),
+                  ),
+                ),
+              ),
+          ]),
+        ]),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(AppRadius.control),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(gradient: AppColors.goldGradient, shape: BoxShape.circle),
+              child: const Icon(Icons.route_rounded, color: AppColors.onGold, size: 19),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('$active ${context.t('active stop(s)')}',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+            ),
+            Icon(Icons.local_shipping_rounded, color: Colors.white.withValues(alpha: 0.8), size: 22),
           ]),
         ),
-        Stack(clipBehavior: Clip.none, children: [
-          Material(
-            color: Colors.white.withValues(alpha: 0.18),
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _openNotifications,
-              child: const Padding(padding: EdgeInsets.all(11), child: Icon(Icons.notifications_none_rounded, color: Colors.white, size: 24)),
-            ),
-          ),
-          if (_unread > 0)
-            Positioned(
-              right: -2, top: -2,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(9), border: Border.all(color: AppColors.primaryDark, width: 1.5)),
-                child: Text(_unread > 9 ? '9+' : '$_unread', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, height: 1.1)),
-              ),
-            ),
-        ]),
       ]),
     );
   }
@@ -243,27 +286,53 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
       ]),
       const SizedBox(height: 12),
       Row(children: [
-        tile(Icons.schedule_rounded, AppColors.gold, '${d.upcomingCount}', context.t('Upcoming'), () => open(TaskGroup.all, priority: TaskUrgency.upcoming)),
+        tile(Icons.schedule_rounded, AppColors.goldDark, '${d.upcomingCount}', context.t('Upcoming'), () => open(TaskGroup.all, priority: TaskUrgency.upcoming)),
         const SizedBox(width: 12),
         tile(Icons.emoji_events_rounded, AppColors.success, '${d.completedTotal}', context.t('Total completed'), () => open(TaskGroup.completed)),
       ]),
     ]);
   }
 
+  /// Bordered square action tiles (same "Categories" language as the customer home).
   Widget _quickActions(BuildContext context) {
-    Widget a(IconData i, String l, VoidCallback onTap) => Expanded(
-          child: SoftCard(
-            onTap: onTap,
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-            child: Column(children: [Icon(i, color: AppColors.primary, size: 24), const SizedBox(height: 8), Text(l, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: AppColors.ink))]),
+    Widget a(IconData i, String l, VoidCallback onTap, {int badge = 0}) => Expanded(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.tile),
+              onTap: onTap,
+              child: Column(children: [
+                Container(
+                  height: 64,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.tile),
+                    border: Border.all(color: AppColors.line, width: 1.3),
+                    boxShadow: AppShadows.soft,
+                  ),
+                  child: Stack(alignment: Alignment.center, children: [
+                    Icon(i, color: AppColors.primary, size: 26),
+                    if (badge > 0)
+                      PositionedDirectional(
+                        top: 8,
+                        end: 8,
+                        child: Container(width: 9, height: 9, decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle)),
+                      ),
+                  ]),
+                ),
+                const SizedBox(height: 7),
+                Text(l, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppColors.inkSoft)),
+              ]),
+            ),
           ),
         );
-    return Row(children: [
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       a(Icons.list_alt_rounded, context.t('My tasks'), () => widget.onOpenTasks(TaskGroup.all)),
       const SizedBox(width: 12),
       a(Icons.report_problem_rounded, context.t('Issues'), () => widget.onOpenTasks(TaskGroup.issues)),
       const SizedBox(width: 12),
-      a(Icons.notifications_none_rounded, context.t('Alerts'), _openNotifications),
+      a(Icons.notifications_active_rounded, context.t('Alerts'), _openNotifications, badge: _unread),
     ]);
   }
 
