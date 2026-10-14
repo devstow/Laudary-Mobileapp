@@ -1,17 +1,8 @@
-# mobileapp
+# Smart Wash mobile app
 
-A new Flutter project.
+Flutter app for laundry customers and drivers (one login, role-based experience) talking to `SmartWash.Api`.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+* Run locally: `flutter run --dart-define-from-file=env/dev.json` (emulator -> local API on port 5014).
+* Environments / API URL: `env/README.md` (`lib/core/config.dart` is the only reader).
+* Android release, signing, direct-download publishing: `RELEASE.md`.
+* Design system: `DESIGN_SYSTEM.md`.

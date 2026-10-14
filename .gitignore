@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release APKs packaged by tool/build_release_apk.ps1 (published with tool/publish_apk.ps1, never committed)
+/dist/

@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- DEV ONLY: the local API (http://10.0.2.2:5014 / a LAN IP) is plain http. Merged into
+         debug/profile builds only — the release APK keeps Android's default (cleartext blocked). -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

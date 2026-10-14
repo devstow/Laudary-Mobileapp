@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug builds install side by side with the release (com.example.mobileapp.debug). -->
+    <string name="app_name">Smart Wash (dev)</string>
+</resources>

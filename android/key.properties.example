@@ -1,0 +1,8 @@
+# Copy to android/key.properties (git-ignored) and fill in the release signing details.
+# Generate the keystore once (keep it + these passwords in a password manager / secure backup —
+# losing them means future versions can no longer update the installed app):
+#   keytool -genkeypair -v -keystore keystore/smartwash-release.jks -alias smartwash #           -keyalg RSA -keysize 2048 -validity 10000 -storetype JKS
+storeFile=keystore/smartwash-release.jks
+storePassword=CHANGE_ME
+keyAlias=smartwash
+keyPassword=CHANGE_ME

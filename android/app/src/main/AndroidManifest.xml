@@ -4,10 +4,12 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="mobileapp"
+        android:label="@string/app_name"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"><!-- DEV: allow plain http:// to the local API (10.0.2.2). Remove/scope for production (https). -->
+        android:icon="@mipmap/ic_launcher">
+        <!-- Plain http:// (local API at 10.0.2.2) is allowed ONLY in debug/profile builds: see
+             src/debug/AndroidManifest.xml. Release builds talk HTTPS to the staging/production API,
+             so Android's default (cleartext blocked) applies and nothing else needs configuring. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
