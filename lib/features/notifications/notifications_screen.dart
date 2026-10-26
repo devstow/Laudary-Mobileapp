@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/realtime.dart';
 import '../../l10n/l10n.dart';
 import '../../models/notification.dart';
 import '../../services/api_exception.dart';
@@ -25,10 +28,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   late Future<List<AppNotification>> _future;
   bool _unreadOnly = false;
 
+  StreamSubscription<RealtimeEvent>? _rt;
+
   @override
   void initState() {
     super.initState();
     _reload();
+    _rt = context.read<RealtimeClient>().events.listen((e) { if (e.isNotification && mounted) setState(_reload); });
+  }
+
+  @override
+  void dispose() {
+    _rt?.cancel();
+    super.dispose();
   }
 
   void _reload() => _future = context.read<NotificationService>().all();

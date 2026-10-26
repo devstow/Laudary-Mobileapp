@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths for documents saved on Android 7–9 (getExternalFilesDir/Download/SmartWash);
+     Android 10+ uses MediaStore content URIs instead. See MainActivity.kt / lib/core/downloads.dart. -->
+<paths>
+    <external-files-path name="downloads" path="." />
+</paths>

@@ -1,7 +1,7 @@
 name: mobileapp
 description: "Smart-Wash — Customer app (KSA)."
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.0+4
 
 environment:
   sdk: ^3.12.2
@@ -22,6 +22,7 @@ dependencies:
   geolocator: ^13.0.2           # "use my current location" for the pickup pin
   url_launcher: ^6.3.1          # tap-to-call + open pickup/delivery in maps (parity w/ web)
   image_picker: ^1.1.2          # driver proof-of-delivery photo (camera/gallery)
+  signalr_netcore: ^1.4.4
 
 dev_dependencies:
   flutter_test:

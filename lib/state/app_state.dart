@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 
 import '../core/api_client.dart';
 import '../core/token_store.dart';
+import '../core/realtime.dart';
 import '../l10n/l10n.dart';
 import '../models/auth.dart';
 import '../models/tenant.dart';
@@ -34,6 +35,8 @@ class AppState extends ChangeNotifier {
   final LocaleController locale;
   final ThemeController theme;
   final TenantService _tenants;
+  /// Live updates from the API hub (orders/tasks/notifications) — connected for the signed-in session.
+  late final RealtimeClient realtime = RealtimeClient(store);
 
   AppStatus status = AppStatus.bootstrapping;
   String? tenantName;
@@ -72,6 +75,7 @@ class AppState extends ChangeNotifier {
     tenantAppName = await store.tenantAppName;
     currency = await store.tenantCurrency ?? 'SAR';
     _set(AppStatus.loggedIn);
+    unawaited(realtime.connect());
     // Refresh the laundry's CURRENT branding + currency (best-effort, never blocks the UI).
     unawaited(_refreshBranding(user!.tenantId));
   }
@@ -115,6 +119,7 @@ class AppState extends ChangeNotifier {
       unawaited(_refreshBranding(result.user.tenantId));
     }
     _set(AppStatus.loggedIn);
+    unawaited(realtime.connect());
   }
 
   Future<void> logout() async {
@@ -137,6 +142,7 @@ class AppState extends ChangeNotifier {
 
   // The next sign-in may be a different business, so drop the cached branding too.
   Future<void> _signedOut() async {
+    await realtime.disconnect();
     await store.clearAll();
     user = null;
     _applyBranding(null, null, null, 'SAR');

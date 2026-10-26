@@ -1,11 +1,11 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config.dart';
+import '../../core/downloads.dart';
 import '../../l10n/l10n.dart';
 import '../../models/enums.dart';
 import '../../models/order_receipt.dart';
@@ -57,16 +57,17 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     try {
       final bytes = await context.read<OrderService>().receiptPdfBytes(widget.orderId);
       final name = (r.number == null || r.number!.isEmpty) ? r.orderNumber : r.number!;
-      final file = File('${Directory.systemTemp.path}/Receipt-$name.pdf');
-      await file.writeAsBytes(bytes, flush: true);
-      final uri = Uri.file(file.path);
-      var opened = false;
-      if (await canLaunchUrl(uri)) {
-        opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-      if (mounted && !opened) {
+      // Save into the public Downloads folder (Downloads/SmartWash) and open it in the PDF viewer. The old
+      // temp-file + file:// launch never produced a visible download on Android.
+      final saved = await Downloads.save('Receipt-$name.pdf', Uint8List.fromList(bytes));
+      final opened = await Downloads.open(saved);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.t('Saved')}: ${file.path}')),
+          SnackBar(
+            content: Text('${context.t('Receipt saved to Downloads')}: ${saved.path}'),
+            duration: Duration(seconds: opened ? 4 : 8),
+            action: SnackBarAction(label: context.t('Open'), onPressed: () => Downloads.open(saved)),
+          ),
         );
       }
     } catch (e) {

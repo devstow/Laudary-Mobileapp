@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/realtime.dart';
 import '../../l10n/l10n.dart';
 import '../../models/delivery.dart';
 import '../../models/enums.dart';
@@ -32,6 +33,7 @@ class _DriverTasksScreenState extends State<DriverTasksScreen> {
   final _scroll = ScrollController();
   late final GeofenceHeartbeat _geofence = GeofenceHeartbeat(context.read<DeliveryService>());
   Timer? _debounce;
+  StreamSubscription<RealtimeEvent>? _rt;
 
   String _q = '';
   late TaskGroup _group = widget.initialGroup;
@@ -53,11 +55,14 @@ class _DriverTasksScreenState extends State<DriverTasksScreen> {
       if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 400) _loadMore();
     });
     _load(reset: true);
+    // Live: assignments, reschedules and order changes reload the task list.
+    _rt = context.read<RealtimeClient>().events.listen((e) { if (e.touchesOrders && mounted) _load(reset: true); });
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _rt?.cancel();
     _geofence.dispose();
     _searchCtrl.dispose();
     _scroll.dispose();

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/realtime.dart';
 import '../../l10n/l10n.dart';
 import '../../models/ai.dart';
 import '../../models/delivery.dart';
@@ -33,6 +34,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
   late final GeofenceHeartbeat _geofence = GeofenceHeartbeat(context.read<DeliveryService>());
   int _unread = 0;
   Timer? _poll;
+  StreamSubscription<RealtimeEvent>? _rt;
 
   @override
   void initState() {
@@ -40,12 +42,14 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
     WidgetsBinding.instance.addObserver(this);
     _future = _fetch();
     _loadUnread();
+    _rt = context.read<RealtimeClient>().events.listen(_onRealtime);
     _poll = Timer.periodic(const Duration(seconds: 20), (_) => _loadUnread());
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _rt?.cancel();
     _geofence.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -73,6 +77,16 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
     setState(() => _future = _fetch());
     _loadUnread();
     await _future;
+  }
+
+  void _onRealtime(RealtimeEvent e) {
+    if (!mounted) return;
+    if (e.isNotification) {
+      _loadUnread();
+      final n = e.notification;
+      if (n != null && n.title.isNotEmpty) showToast(context, n.title);
+    }
+    if (e.touchesOrders) _refresh();
   }
 
   Future<void> _loadUnread() async {

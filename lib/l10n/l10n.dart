@@ -20,6 +20,10 @@ class AppStrings {
   AppStrings._();
 
   static const Map<String, String> _ar = {
+    'Receipt saved to Downloads': 'تم حفظ الإيصال في مجلد التنزيلات',
+    'Open': 'فتح',
+    'Download / Print': 'تنزيل / طباعة',
+    'Receipt': 'الإيصال',
     'Choose your laundry': 'اختر مغسلتك',
     'Search laundries': 'ابحث عن مغسلة',
     'Continue': 'متابعة',

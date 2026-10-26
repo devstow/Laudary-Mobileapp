@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/realtime.dart';
 import '../../l10n/l10n.dart';
 import '../../models/ai.dart';
 import '../../models/enums.dart';
@@ -32,6 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   late Future<CustomerOrderPage> _future;
   int _unread = 0;
   Timer? _poll;
+  StreamSubscription<RealtimeEvent>? _rt;
 
   @override
   void initState() {
@@ -39,6 +41,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     WidgetsBinding.instance.addObserver(this);
     _future = context.read<OrderService>().myOrders(pageSize: 100);
     _loadUnread();
+    // Live: a pushed notification updates the badge at once; an order/task change reloads the list.
+    _rt = context.read<RealtimeClient>().events.listen(_onRealtime);
     // Poll the unread count so the bell badge updates on its own when a new
     // notification arrives — same approach as the web bell (which polls ~25s).
     _poll = Timer.periodic(const Duration(seconds: 20), (_) => _loadUnread());
@@ -47,8 +51,19 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   @override
   void dispose() {
     _poll?.cancel();
+    _rt?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onRealtime(RealtimeEvent e) {
+    if (!mounted) return;
+    if (e.isNotification) {
+      _loadUnread();
+      final n = e.notification;
+      if (n != null && n.title.isNotEmpty) showToast(context, n.title);
+    }
+    if (e.touchesOrders) setState(() => _future = context.read<OrderService>().myOrders(pageSize: 100));
   }
 
   @override

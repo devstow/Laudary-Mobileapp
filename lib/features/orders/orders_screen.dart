@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/realtime.dart';
 import '../../l10n/l10n.dart';
 import '../../models/enums.dart';
 import '../../models/order.dart';
@@ -35,6 +36,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   final _searchCtrl = TextEditingController();
   final _scroll = ScrollController();
   Timer? _debounce;
+  StreamSubscription<RealtimeEvent>? _rt;
 
   String _q = '';
   OrderStatus? _status;
@@ -53,11 +55,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
     super.initState();
     _scroll.addListener(_onScroll);
     _load(reset: true);
+    // Live: any change to one of my orders (status, payment, pickup/delivery) reloads the list.
+    _rt = context.read<RealtimeClient>().events.listen((e) { if (e.touchesOrders && mounted) _load(reset: true); });
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _rt?.cancel();
     _searchCtrl.dispose();
     _scroll.dispose();
     super.dispose();

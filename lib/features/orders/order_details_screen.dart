@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config.dart';
+import '../../core/realtime.dart';
 import '../../l10n/l10n.dart';
 import '../../models/ai.dart';
 import '../../models/enums.dart';
@@ -39,10 +42,22 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   bool _busy = false;
   String? _error;
 
+  StreamSubscription<RealtimeEvent>? _rt;
+
   @override
   void initState() {
     super.initState();
     _load();
+    // Live: reload when THIS order (or one of its pickup/delivery tasks) changes.
+    _rt = context.read<RealtimeClient>().events.listen((e) {
+      if (e.touchesOrders && (e.orderId ?? '').toLowerCase() == widget.orderId.toLowerCase() && mounted) _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _rt?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {

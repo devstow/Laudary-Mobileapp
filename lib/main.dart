@@ -15,6 +15,7 @@ import 'services/notification_service.dart';
 import 'services/order_service.dart';
 import 'services/profile_service.dart';
 import 'services/tenant_service.dart';
+import 'core/realtime.dart';
 import 'state/app_state.dart';
 import 'state/theme_controller.dart';
 
@@ -53,6 +54,7 @@ void main() {
         ChangeNotifierProvider<LocaleController>.value(value: locale),
         ChangeNotifierProvider<ThemeController>.value(value: theme),
         ChangeNotifierProvider<AppState>.value(value: appState),
+        ChangeNotifierProvider<RealtimeClient>.value(value: appState.realtime),
       ],
       child: const SmartWashApp(),
     ),
