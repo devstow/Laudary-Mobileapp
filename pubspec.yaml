@@ -1,8 +1,7 @@
-name: mobileapp
-description: "Smart-Wash — Customer app (KSA)."
+﻿name: mobileapp
+description: "Smart-Wash â€” Customer app (KSA)."
 publish_to: 'none'
-version: 1.0.0+5
-
+version: 1.0.0+6
 environment:
   sdk: ^3.12.2
 
@@ -31,7 +30,7 @@ dev_dependencies:
 
 # Android build fix: path_provider_android 2.3.x pulls the `jni` plugin whose Android Gradle
 # script is incompatible with the current AGP/Kotlin setup ("Could not find method kotlin()").
-# path_provider is only a transitive (desktop secure-storage) dep — unused on Android — so pin
+# path_provider is only a transitive (desktop secure-storage) dep â€” unused on Android â€” so pin
 # it to the pre-jni line to drop the broken plugin entirely.
 dependency_overrides:
   path_provider_android: ">=2.2.0 <2.3.0"

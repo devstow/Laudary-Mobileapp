@@ -1,0 +1,5 @@
+# SHA-256 fingerprint of the Smart Wash Android RELEASE signing certificate (android/keystore/smartwash-release.jks,
+# alias "smartwash", created 2026-10-14). Not a secret - it is what `apksigner verify --print-certs` prints for every
+# published APK. build_release_apk.ps1 refuses to package an APK signed with anything else, and publish_apk.ps1 refuses
+# to upload one, because Android will not install an update signed with a different key ("App not installed").
+ade75d64c12afd46704a53c7a32aa599cd2b20d5c3e55e948db7695b077484c1

@@ -54,17 +54,30 @@ cd D:\Source\MobileApp
 ```
 
 What the script checks/does: `key.properties` + keystore present, `env/staging.json` has an HTTPS URL,
-version read from `pubspec.yaml`, `flutter build apk --release --dart-define-from-file=env/staging.json`,
-copies the APK to `dist/<env>/smartwash.apk` and writes `smartwash.json`
-(`version`, `buildNumber`, `applicationId`, `environment`, `apiBaseUrl`, `sizeBytes`, `sha256`, `builtAtUtc`).
-The landing page shows the version/size/date from this file. `dist/` is git-ignored — APKs are never committed.
+version read from `pubspec.yaml`, build number above what the landing page already serves
+(`/download/android/info`), then `flutter build apk --release --target-platform android-arm,android-arm64
+--dart-define-from-file=env/staging.json` (ARM only — x86_64 was a third of the file and only serves
+emulators). After the build it **verifies the APK** with `apksigner` / `aapt` and aborts on any failure:
 
-Verify a build (optional):
+* exactly one signer, certificate fingerprint equal to `tool/release-cert.sha256` (the release key), v2/v3 schemes;
+* application id and `versionCode`/`versionName` equal to `pubspec.yaml`; not debuggable / testOnly;
+* `arm64-v8a` and `armeabi-v7a` libraries present.
+
+Only then it copies the APK to `dist/<env>/smartwash.apk` and writes `smartwash.json` (`version`, `buildNumber`,
+`applicationId`, `environment`, `apiBaseUrl`, `sizeBytes`, `sha256`, `certSha256`, `abis`, `minSdk`,
+`targetSdk`, `builtAtUtc`). The landing page shows the version/size/date from this file and names the download
+`SmartWash-<version>-<build>.apk`. `dist/` is git-ignored — APKs are never committed.
+
+`tool/release-cert.sha256` is the pin. If the signing key is ever replaced on purpose, change the pin in the same
+commit — and know that every phone with the old key's app must uninstall it first (Android never updates across keys).
+
+Manual check of any APK (what the script runs):
 
 ```powershell
-$bt = "$env:LOCALAPPDATA\Android\sdk\build-tools\36.0.0"
-& "$bt\apksigner.bat" verify --print-certs dist\staging\smartwash.apk     # needs JAVA_HOME → Android Studio jbr
-& "$bt\aapt2.exe" dump badging dist\staging\smartwash.apk | Select-String "package|application-label"
+$env:JAVA_HOME = "$env:ProgramFiles\Android\Android Studio\jbr"
+$bt = "$env:LOCALAPPDATA\Android\Sdk\build-tools\36.0.0"
+& "$bt\apksigner.bat" verify --verbose --print-certs dist\staging\smartwash.apk   # Verifies / v2,v3 true / SHA-256 = pin
+& "$bt\aapt.exe" dump badging dist\staging\smartwash.apk | Select-String "package|sdkVersion|native-code"
 ```
 
 ## Publish to the staging landing page
@@ -73,10 +86,13 @@ $bt = "$env:LOCALAPPDATA\Android\sdk\build-tools\36.0.0"
 .\tool\publish_apk.ps1 -Env staging -SshKey D:\Source\Server-Prod\Sahala_key.pem
 ```
 
-Copies the two files to `/opt/Staging/SmartWash/data/downloads/android/` (owner `smartwash`, mode 640),
-swaps them in atomically and prints the server-side SHA-256 plus the public response. The web app notices
-the new file on the next request — no restart. Download URL:
-**https://smartwash-staging.20-203-96-110.nip.io/download/android**
+Refuses to publish unless `smartwash.json` carries the pinned release certificate and a build number above the
+one the landing page serves. Copies the two files to `/opt/Staging/SmartWash/data/downloads/android/` (owner
+`smartwash`, mode 640), checks the upload's SHA-256 on the server, swaps them in atomically, then **downloads the
+public file in full** and compares its SHA-256 with the local build and `/download/android/info` with the new
+build number — the run fails if users would get anything other than the file that was just verified. The web
+app notices the new file on the next request — no restart. Download URL:
+**https://smartwash-staging.20-203-96-110.nip.io/download/android** (facts: `…/download/android/info`)
 
 ## Versioning
 
@@ -100,7 +116,10 @@ stay logged in.
 | `build_release_apk.ps1`: "android/key.properties not found" | Set up signing (above). |
 | Gradle warning "release build is signed with the DEBUG key" | Same cause — `key.properties` missing or unreadable. |
 | App shows *Build configuration error* | Built without `--dart-define-from-file` / non-HTTPS URL. Use the script. |
-| "App not installed" (sometimes "…package conflicts with an existing package") | The phone already has `com.example.mobileapp` signed with a **different key** — typically a debug build from `flutter run` / `app-debug.apk`, or a release built before `key.properties` existed (those were debug-signed too). Android never replaces an app across keys. Fix once: *Settings → Apps → Smart Wash / mobileapp → Uninstall*, then install the download again. Debug builds now use the id `com.example.mobileapp.debug` ("Smart Wash (dev)") so this cannot recur. Exact reason: `adb install -r dist\staging\smartwash.apk` prints e.g. `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Other causes: lower build number than the installed one, Android < 7.0 (`minSdk 24`), or no free storage. |
+| "App not installed" | Android shows this one line for several different failures. Check in this order: **(1) Incomplete download** — the file in *Downloads* must be named `SmartWash-<version>-<build>.apk` and be exactly the size the landing page shows (`/download/android/info` has the bytes + SHA-256). Slow or dropped mobile connections leave a shorter file, and an old `SmartWash-1.0.0.apk` next to it is easy to tap by mistake. Delete, re-download on Wi-Fi. (Server side: the web app disables Kestrel's minimum-data-rate abort for this endpoint and supports ranged resumes keyed on the ETag.) **(2) Different signing key** — the phone already has `com.example.mobileapp` signed with another key: a debug build from `flutter run` / `app-debug.apk` made before debug builds got the `.debug` id, or a release built before `key.properties` existed. Android never replaces an app across keys. Fix once: *Settings → Apps → Smart Wash / mobileapp → Uninstall*, then install the download. The build script now refuses to package anything not signed with the pinned release certificate, so a published APK can't cause this again. **(3) Downgrade** — build number not above the installed one; the build and publish scripts refuse to ship a number ≤ the published one. **(4)** Android < 7.0 (`minSdk 24`) or no free storage. Exact reason from a PC: `adb install -r dist\staging\smartwash.apk` prints e.g. `INSTALL_FAILED_UPDATE_INCOMPATIBLE` / `INSTALL_FAILED_VERSION_DOWNGRADE` / `INSTALL_PARSE_FAILED_NOT_APK`. |
 | "Network error. Please check your connection." on every screen | API unreachable from the phone: `https://smartwash-staging-api.20-203-96-110.nip.io/health` in the phone's browser. |
 | Password reset says email is not set up | The staging API has no SMTP configured yet (platform setting); other flows are unaffected. |
-| Large APK (~57 MB) | It is a universal APK (arm64 + armeabi-v7a + x86_64). Add `--split-per-abi` to the build if size matters; then publish the `arm64-v8a` file. |
+| APK size | ~37 MB: arm64-v8a + armeabi-v7a (every real phone). x86_64 is deliberately left out (emulators only; it was ~20 MB). `--split-per-abi` would halve it again but then two files must be published and users must pick the right one — not worth an extra "App not installed" path. |
+| `build_release_apk.ps1`: "signed with the WRONG certificate" | `key.properties` points at a different keystore than the pinned one in `tool/release-cert.sha256`. Restore the original keystore; do not change the pin unless the key is being replaced on purpose. |
+| `build_release_apk.ps1` / `publish_apk.ps1`: "already serves build N" | Bump `version: x.y.z+N` in `pubspec.yaml` — phones refuse to install a build number that is not higher than the installed one. |
+| `publish_apk.ps1`: "PUBLIC DOWNLOAD DIFFERS" | Something between the server folder and the browser (proxy, cache, partial swap) altered the file. Nothing was handed to users that matches the build — fix the server path, re-run. |
