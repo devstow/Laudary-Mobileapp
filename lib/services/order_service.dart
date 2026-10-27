@@ -166,6 +166,14 @@ class OrderService {
     return OrderDetail.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// GET /api/portal/orders/{id}/tasks — the order's pickup/delivery legs (driver name, progress,
+  /// schedule, proof photo). Customer-safe projection; empty when the order has no legs.
+  Future<List<OrderLeg>> legs(String id) async {
+    final res = await _api.dio.get('/api/portal/orders/$id/tasks');
+    if (!isOk(res)) throw ApiException.from(res);
+    return (res.data as List).map((e) => OrderLeg.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   /// GET /api/portal/orders/{id}/timeline — status history.
   Future<List<OrderEvent>> timeline(String id) async {
     final res = await _api.dio.get('/api/portal/orders/$id/timeline');

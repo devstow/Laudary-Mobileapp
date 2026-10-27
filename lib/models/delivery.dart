@@ -131,6 +131,15 @@ class DriverDashboard {
     required this.todayCount,
     required this.upcomingCount,
     required this.completedTotal,
+    this.upcoming = const [],
+    this.todayPickups = 0,
+    this.todayDeliveries = 0,
+    this.completedToday = 0,
+    this.completedThisWeek = 0,
+    this.issuesCount = 0,
+    this.failedCount = 0,
+    this.successRate,
+    this.unscheduledCount = 0,
   });
 
   final List<DeliveryTask> active;
@@ -142,6 +151,17 @@ class DriverDashboard {
   final int todayCount;
   final int upcomingCount;
   final int completedTotal;
+  /// Next scheduled open tasks (soonest first, ≤ 5) — "Up next".
+  final List<DeliveryTask> upcoming;
+  final int todayPickups;
+  final int todayDeliveries;
+  final int completedToday;
+  final int completedThisWeek;
+  final int issuesCount;
+  final int failedCount;
+  /// Completed ÷ (completed + failed) in %, null until something has finished.
+  final int? successRate;
+  final int unscheduledCount;
 
   static List<DeliveryTask> _list(dynamic v) =>
       (v as List? ?? const []).map((e) => DeliveryTask.fromJson(e as Map<String, dynamic>)).toList();
@@ -157,6 +177,15 @@ class DriverDashboard {
         todayCount: _i(j['todayCount']),
         upcomingCount: _i(j['upcomingCount']),
         completedTotal: _i(j['completedTotal']),
+        upcoming: _list(j['upcoming']),
+        todayPickups: _i(j['todayPickups']),
+        todayDeliveries: _i(j['todayDeliveries']),
+        completedToday: _i(j['completedToday']),
+        completedThisWeek: _i(j['completedThisWeek']),
+        issuesCount: _i(j['issuesCount']),
+        failedCount: _i(j['failedCount']),
+        successRate: j['successRate'] == null ? null : _i(j['successRate']),
+        unscheduledCount: _i(j['unscheduledCount']),
       );
 }
 

@@ -38,6 +38,7 @@ class OrderDetailsScreen extends StatefulWidget {
 class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   OrderDetail? _order;
   List<OrderEvent> _timeline = const [];
+  List<OrderLeg> _legs = const [];
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -65,10 +66,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     try {
       final svc = context.read<OrderService>();
       final r = await Future.wait([svc.detail(widget.orderId), svc.timeline(widget.orderId)]);
+      List<OrderLeg> legs = const [];
+      try { legs = await svc.legs(widget.orderId); } catch (_) {/* optional section */}
       if (!mounted) return;
       setState(() {
         _order = r[0] as OrderDetail;
         _timeline = r[1] as List<OrderEvent>;
+        _legs = legs;
         _loading = false;
       });
     } catch (e) {
@@ -288,6 +292,17 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           const SizedBox(height: 12),
         ],
 
+        // Your driver: the pickup / delivery legs (driver name, progress, proof photo) — real task data.
+        if (_legs.isNotEmpty) ...[
+          _AccordionSection(
+            title: context.t('Your driver'),
+            icon: Icons.local_shipping_rounded,
+            initiallyExpanded: true,
+            child: Column(children: [for (final l in _latestLegs()) _legRow(l, lang)]),
+          ),
+          const SizedBox(height: 12),
+        ],
+
         // Pickup & delivery (map + addresses + contact)
         if (o.hasPickupPin || o.pickupAddress != null || o.contactPhone != null) ...[
           _AccordionSection(
@@ -379,6 +394,77 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   // Pinned bottom CTA for the delivery-time step (the one high-value action on this screen).
+  /// One row per leg: the latest attempt of the pickup and of the delivery.
+  List<OrderLeg> _latestLegs() {
+    final out = <OrderLeg>[];
+    for (final type in DeliveryType.values) {
+      final ofType = _legs.where((l) => l.type == type).toList()
+        ..sort((a, b) => b.attemptNumber.compareTo(a.attemptNumber));
+      if (ofType.isNotEmpty) out.add(ofType.first);
+    }
+    return out;
+  }
+
+  String _legLabel(DeliveryStatus s) {
+    switch (s) {
+      case DeliveryStatus.pending:
+      case DeliveryStatus.assigned:
+        return context.t('Driver being arranged');
+      case DeliveryStatus.accepted:
+        return context.t('Driver assigned');
+      case DeliveryStatus.inTransit:
+        return context.t('Driver on the way');
+      case DeliveryStatus.arrived:
+        return context.t('Driver arrived');
+      case DeliveryStatus.completed:
+        return context.t('Completed');
+      case DeliveryStatus.failed:
+      case DeliveryStatus.rejected:
+        return context.t('Being rescheduled');
+      case DeliveryStatus.cancelled:
+        return context.t('Cancelled');
+    }
+  }
+
+  Widget _legRow(OrderLeg l, String lang) {
+    final c = l.isPickup ? AppColors.warning : AppColors.success;
+    final done = l.status == DeliveryStatus.completed;
+    final sc = done ? AppColors.success : (l.status.isClosed ? AppColors.danger : AppColors.primary);
+    final showDriver = (l.driverName ?? '').isNotEmpty && !l.status.isClosed && l.status != DeliveryStatus.pending;
+    final when = l.completedAt ?? l.scheduledAt;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(children: [
+        Container(width: 38, height: 38, decoration: BoxDecoration(color: c.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(11)), child: Icon(l.isPickup ? Icons.download_rounded : Icons.local_shipping_rounded, color: c, size: 19)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(context.t(l.isPickup ? 'Pickup' : 'Delivery'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink)),
+            const SizedBox(height: 2),
+            Text(
+              [if (showDriver) l.driverName!, if (when != null) _fmt(when, lang)].join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+          ]),
+        ),
+        if ((l.proofPhotoUrl ?? '').isNotEmpty) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(l.proofPhotoUrl!, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(color: sc.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.chip)),
+          child: Text(_legLabel(l.status), style: TextStyle(color: sc, fontWeight: FontWeight.w800, fontSize: 11)),
+        ),
+      ]),
+    );
+  }
+
   Widget _deliveryCta(OrderDetail o) {
     return Container(
       decoration: BoxDecoration(

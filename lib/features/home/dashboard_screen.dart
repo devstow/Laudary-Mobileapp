@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:provider/provider.dart';
 
 import '../../core/realtime.dart';
@@ -18,6 +19,7 @@ import '../../widgets/ui.dart';
 import '../assistant/assistant_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../orders/orders_screen.dart';
+import '../payments/payments_screen.dart';
 import '../track/track_screen.dart';
 import '../orders/order_details_screen.dart';
 
@@ -98,6 +100,21 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     return n;
   }
 
+  /// The next scheduled pickups (orders not yet collected) and deliveries (orders ready / on the way).
+  List<_Slot> _upcoming(CustomerOrderPage p) {
+    final now = DateTime.now().subtract(const Duration(hours: 2));
+    final out = <_Slot>[];
+    for (final o in p.items) {
+      if (o.status == OrderStatus.draft || o.status == OrderStatus.placed || o.status == OrderStatus.pickupScheduled) {
+        if (o.pickupAt != null && o.pickupAt!.isAfter(now)) out.add(_Slot(o, true, o.pickupAt!));
+      } else if (o.status == OrderStatus.ready || o.status == OrderStatus.outForDelivery) {
+        if (o.deliveryAt != null && o.deliveryAt!.isAfter(now)) out.add(_Slot(o, false, o.deliveryAt!));
+      }
+    }
+    out.sort((a, b) => a.at.compareTo(b.at));
+    return out.take(3).toList();
+  }
+
   int _active(CustomerOrderPage p) {
     var n = 0;
     p.statusCounts.forEach((k, v) {
@@ -113,6 +130,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
 
     void openTrack() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrackScreen()));
     void openOrders() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen()));
+    void openPayments() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaymentsScreen()));
 
     return Scaffold(
       body: RefreshIndicator(
@@ -183,6 +201,20 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                               '${_count(p, {OrderStatus.ready, OrderStatus.outForDelivery})}', context.t('Ready / on the way')),
                           _Stat(Icons.receipt_long_rounded, AppColors.goldDark, '${p.allCount}', context.t('Total orders')),
                         ]),
+                        if (p.outstanding > 0) ...[
+                          const SizedBox(height: 12),
+                          _OutstandingRow(amount: p.outstanding, currency: p.currency, onTap: openPayments),
+                        ],
+                        if (_upcoming(p).isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          SectionHeader(context.t('Upcoming')),
+                          const SizedBox(height: 12),
+                          ..._upcoming(p).map((u) => _UpcomingRow(slot: u, onTap: () async {
+                                await Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => OrderDetailsScreen(orderId: u.order.id, orderNumber: u.order.orderNumber)));
+                                if (context.mounted) _refresh();
+                              })),
+                        ],
                         const SizedBox(height: 24),
                         SectionHeader(context.t('Active orders'),
                             actionLabel: p.allCount > activeOrders.length ? context.t('View all') : null,
@@ -445,6 +477,83 @@ class _CategoryTile extends StatelessWidget {
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, height: 1.2, color: AppColors.inkSoft)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _Slot {
+  const _Slot(this.order, this.isPickup, this.at);
+  final OrderListItem order;
+  final bool isPickup;
+  final DateTime at;
+}
+
+/// Amber "outstanding balance" strip → Payments (same visual as the mobile wallet card accent).
+class _OutstandingRow extends StatelessWidget {
+  const _OutstandingRow({required this.amount, required this.currency, required this.onTap});
+  final double amount;
+  final String currency;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final lang = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
+    return SoftCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(14),
+      child: Row(children: [
+        Container(width: 40, height: 40, decoration: const BoxDecoration(gradient: AppColors.goldGradient, shape: BoxShape.circle), child: const Icon(Icons.payments_rounded, color: AppColors.onGold, size: 20)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(context.t('Outstanding'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink)),
+            Text(context.t('Payment is collected on delivery.'), style: TextStyle(color: AppColors.muted, fontSize: 12)),
+          ]),
+        ),
+        Text(money(amount, currency, lang), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.goldDark)),
+        Icon(Icons.chevron_right_rounded, color: AppColors.faint),
+      ]),
+    );
+  }
+}
+
+/// One upcoming pickup / delivery: date block + kind + order → the order's tracking page.
+class _UpcomingRow extends StatelessWidget {
+  const _UpcomingRow({required this.slot, required this.onTap});
+  final _Slot slot;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final lang = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
+    final c = slot.isPickup ? AppColors.warning : AppColors.success;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SoftCard(
+        onTap: onTap,
+        padding: const EdgeInsets.all(12),
+        child: Row(children: [
+          Container(
+            width: 56,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(10)),
+            child: Column(children: [
+              Text(DateFormat('dd', lang).format(slot.at), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.primary, height: 1)),
+              Text(DateFormat('MMM', lang).format(slot.at), style: TextStyle(color: AppColors.muted, fontSize: 10.5)),
+              Text(DateFormat('HH:mm', lang).format(slot.at), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: AppColors.inkSoft)),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          Container(width: 36, height: 36, decoration: BoxDecoration(color: c.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(10)), child: Icon(slot.isPickup ? Icons.download_rounded : Icons.local_shipping_rounded, color: c, size: 18)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${context.t(slot.isPickup ? 'Pickup' : 'Delivery')} · ${slot.order.orderNumber}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink)),
+              const SizedBox(height: 2),
+              Text(context.t(slot.order.status.label), style: TextStyle(color: AppColors.muted, fontSize: 12)),
+            ]),
+          ),
+          Icon(Icons.chevron_right_rounded, color: AppColors.faint),
         ]),
       ),
     );

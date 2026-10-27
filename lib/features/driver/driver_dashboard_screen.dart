@@ -142,6 +142,12 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
                       const SizedBox(height: 18),
                       _quickActions(context),
                       const SizedBox(height: 24),
+                      if (d.upcoming.isNotEmpty) ...[
+                        SectionHeader(context.t('Up next')),
+                        const SizedBox(height: 12),
+                        ...d.upcoming.take(3).map((t) => _upNextRow(context, t, lang)),
+                        const SizedBox(height: 12),
+                      ],
                       SectionHeader(context.t('Active tasks')),
                       const SizedBox(height: 12),
                       if (d.active.isEmpty)
@@ -171,6 +177,10 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
                             ),
                           ),
                       ],
+                      const SizedBox(height: 20),
+                      SectionHeader(context.t('Your performance')),
+                      const SizedBox(height: 12),
+                      _performance(context, d),
                       if (d.recentCompleted.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         SectionHeader(context.t('Recent activity')),
@@ -302,9 +312,72 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
       Row(children: [
         tile(Icons.schedule_rounded, AppColors.goldDark, '${d.upcomingCount}', context.t('Upcoming'), () => open(TaskGroup.all, priority: TaskUrgency.upcoming)),
         const SizedBox(width: 12),
-        tile(Icons.emoji_events_rounded, AppColors.success, '${d.completedTotal}', context.t('Total completed'), () => open(TaskGroup.completed)),
+        tile(Icons.report_problem_rounded, AppColors.danger, '${d.issuesCount}', context.t('Issues'), () => open(TaskGroup.issues)),
       ]),
     ]);
+  }
+
+  /// Completed today / this week / all time + the completion rate — all from the driver's own history.
+  Widget _performance(BuildContext context, DriverDashboard d) {
+    Widget cell(String v, String l) => Expanded(
+          child: Column(children: [
+            Text(v, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink, height: 1.1)),
+            const SizedBox(height: 3),
+            Text(l, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.muted, fontSize: 11.5, height: 1.2)),
+          ]),
+        );
+    return SoftCard(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      child: Row(children: [
+        cell('${d.completedToday}', context.t('Completed today')),
+        VerticalDivider(width: 1, color: AppColors.lineSoft),
+        cell('${d.completedThisWeek}', context.t('Done this week')),
+        VerticalDivider(width: 1, color: AppColors.lineSoft),
+        cell('${d.completedTotal}', context.t('Total completed')),
+        VerticalDivider(width: 1, color: AppColors.lineSoft),
+        cell(d.successRate == null ? '—' : '${d.successRate}%', context.t('Completion rate')),
+      ]),
+    );
+  }
+
+  /// One "Up next" row: date/time block + type + order + customer → opens the task detail.
+  Widget _upNextRow(BuildContext context, DeliveryTask t, String lang) {
+    final when = t.scheduledAt!;
+    final late = when.isBefore(DateTime.now());
+    final c = deliveryTypeColor(t.type);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SoftCard(
+        padding: const EdgeInsets.all(12),
+        onTap: () async {
+          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => DriverTaskDetailScreen(task: t)));
+          if (mounted) _refresh();
+        },
+        child: Row(children: [
+          Container(
+            width: 56,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(color: (late ? AppColors.danger : AppColors.primary).withValues(alpha: 0.10), borderRadius: BorderRadius.circular(10)),
+            child: Column(children: [
+              Text(DateFormat('dd', lang).format(when), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: late ? AppColors.danger : AppColors.primary, height: 1)),
+              Text(DateFormat('MMM', lang).format(when), style: TextStyle(color: AppColors.muted, fontSize: 10.5)),
+              Text(DateFormat('HH:mm', lang).format(when), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: AppColors.inkSoft)),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          Container(width: 36, height: 36, decoration: BoxDecoration(color: c.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(10)), child: Icon(t.isPickup ? Icons.download_rounded : Icons.upload_rounded, color: c, size: 18)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${t.orderNumber ?? '—'} · ${context.t(t.type.label)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink)),
+              const SizedBox(height: 2),
+              Text(t.customerName ?? (t.address ?? '—'), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.muted, fontSize: 12)),
+            ]),
+          ),
+          Icon(Icons.chevron_right_rounded, color: AppColors.faint),
+        ]),
+      ),
+    );
   }
 
   /// Bordered square action tiles (same "Categories" language as the customer home).

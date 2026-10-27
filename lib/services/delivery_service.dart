@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../core/api_client.dart';
 import '../models/delivery.dart';
+import '../models/driver_task_detail.dart';
 import '../models/enums.dart';
 import 'api_exception.dart';
 
@@ -34,6 +35,14 @@ class DeliveryService {
     final res = await _api.dio.get('/api/deliveries/mine', queryParameters: params);
     if (!isOk(res)) throw ApiException.from(res);
     return DriverTaskPage.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// GET /api/deliveries/mine/{id} — one of my tasks in full (order summary, items, instructions,
+  /// amount to collect, the order's other legs, attempt history). 404 for a task that isn't mine.
+  Future<DriverTaskDetail> taskDetail(String id) async {
+    final res = await _api.dio.get('/api/deliveries/mine/$id');
+    if (!isOk(res)) throw ApiException.from(res);
+    return DriverTaskDetail.fromJson(res.data as Map<String, dynamic>);
   }
 
   /// GET /api/deliveries/my-dashboard — KPIs + active + recent completed.

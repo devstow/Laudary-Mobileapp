@@ -1,7 +1,7 @@
 name: mobileapp
 description: "Smart-Wash — Customer app (KSA)."
 publish_to: 'none'
-version: 1.0.0+4
+version: 1.0.0+5
 
 environment:
   sdk: ^3.12.2

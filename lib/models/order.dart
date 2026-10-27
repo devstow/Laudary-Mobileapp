@@ -141,6 +141,33 @@ class OrderTracking {
       );
 }
 
+/// A pickup/delivery leg of the customer's own order (CustomerOrderLegDto).
+class OrderLeg {
+  OrderLeg({required this.id, required this.type, required this.status, this.driverName, this.scheduledAt, this.completedAt, this.proofPhotoUrl, required this.attemptNumber});
+  final String id;
+  final DeliveryType type;
+  final DeliveryStatus status;
+  final String? driverName;
+  final DateTime? scheduledAt;
+  final DateTime? completedAt;
+  final String? proofPhotoUrl;
+  final int attemptNumber;
+
+  bool get isPickup => type == DeliveryType.pickup;
+  static DateTime? _dt(dynamic v) => v == null ? null : DateTime.tryParse(v as String)?.toLocal();
+
+  factory OrderLeg.fromJson(Map<String, dynamic> j) => OrderLeg(
+        id: j['id'] as String,
+        type: DeliveryType.from((j['type'] as num?)?.toInt()),
+        status: DeliveryStatus.from((j['status'] as num?)?.toInt()),
+        driverName: j['driverName'] as String?,
+        scheduledAt: _dt(j['scheduledAt']),
+        completedAt: _dt(j['completedAt']),
+        proofPhotoUrl: j['proofPhotoUrl'] as String?,
+        attemptNumber: (j['attemptNumber'] as num?)?.toInt() ?? 1,
+      );
+}
+
 class OrderEvent {
   OrderEvent({required this.toStatus, this.fromStatus, this.source, this.actorName, this.note, required this.occurredAt});
   final OrderStatus toStatus;
