@@ -163,7 +163,11 @@ enum DeliveryStatus {
   cancelled(5, 'Cancelled'),
   accepted(6, 'Accepted'),
   rejected(7, 'Rejected'),
-  arrived(8, 'Arrived');
+  arrived(8, 'Arrived'),
+  // Pickup leg only: the driver collected the laundry, then handed it over at the branch;
+  // the branch confirming receipt completes the leg.
+  collected(9, 'Collected'),
+  droppedOff(10, 'Handed over at branch');
 
   const DeliveryStatus(this.value, this.label);
   final int value;
@@ -182,6 +186,18 @@ enum DeliveryType {
   final String label;
   static DeliveryType from(int? v) =>
       DeliveryType.values.firstWhere((e) => e.value == v, orElse: () => DeliveryType.pickup);
+}
+
+/// How a pickup-and-delivery order reaches the branch (matches PickupMethod).
+enum PickupMethod {
+  driverPickup(0, 'Driver pickup'),
+  customerDropOff(1, 'Customer drop-off');
+
+  const PickupMethod(this.value, this.label);
+  final int value;
+  final String label;
+  static PickupMethod from(int? v) =>
+      PickupMethod.values.firstWhere((e) => e.value == v, orElse: () => PickupMethod.driverPickup);
 }
 
 /// Driver availability (DriverStatus).
@@ -235,11 +251,28 @@ extension DeliveryStatusX on DeliveryStatus {
     }
   }
 
+  /// Journey index for a specific leg. A pickup continues past "Arrived":
+  /// New → Accepted → In transit → Arrived → Collected → At branch → Received.
+  int journeyIndexFor(DeliveryType type) {
+    if (type != DeliveryType.pickup) return journeyIndex;
+    switch (this) {
+      case DeliveryStatus.collected:
+        return 4;
+      case DeliveryStatus.droppedOff:
+        return 5;
+      case DeliveryStatus.completed:
+        return 6;
+      default:
+        return journeyIndex;
+    }
+  }
+
   bool get isActionable =>
       this == DeliveryStatus.assigned ||
       this == DeliveryStatus.accepted ||
       this == DeliveryStatus.inTransit ||
-      this == DeliveryStatus.arrived;
+      this == DeliveryStatus.arrived ||
+      this == DeliveryStatus.collected;
 
   bool get isClosed =>
       this == DeliveryStatus.failed || this == DeliveryStatus.rejected || this == DeliveryStatus.cancelled;

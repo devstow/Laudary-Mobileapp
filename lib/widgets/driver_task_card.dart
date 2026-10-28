@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../features/navigation/navigation_screen.dart';
 import '../l10n/l10n.dart';
 import '../models/delivery.dart';
 import '../models/enums.dart';
@@ -9,7 +11,7 @@ import '../theme/app_theme.dart';
 import 'ui.dart';
 
 /// Driver actions the card can request (parent runs the service call + reason/proof flow).
-enum DriverAction { accept, reject, start, arrived, complete, fail }
+enum DriverAction { accept, reject, start, arrived, complete, fail, dropOff }
 
 Color deliveryStatusColor(DeliveryStatus s) {
   switch (s) {
@@ -19,7 +21,10 @@ Color deliveryStatusColor(DeliveryStatus s) {
     case DeliveryStatus.inTransit:
       return AppColors.info;
     case DeliveryStatus.arrived:
+    case DeliveryStatus.droppedOff:
       return AppColors.primary;
+    case DeliveryStatus.collected:
+      return AppColors.info;
     case DeliveryStatus.completed:
       return AppColors.success;
     case DeliveryStatus.failed:
@@ -43,6 +48,10 @@ IconData deliveryStatusIcon(DeliveryStatus s) {
       return Icons.local_shipping_rounded;
     case DeliveryStatus.arrived:
       return Icons.where_to_vote_rounded;
+    case DeliveryStatus.collected:
+      return Icons.inventory_2_rounded;
+    case DeliveryStatus.droppedOff:
+      return Icons.storefront_rounded;
     case DeliveryStatus.completed:
       return Icons.check_circle_rounded;
     case DeliveryStatus.failed:
@@ -74,7 +83,7 @@ class DriverTaskCard extends StatelessWidget {
     final df = DateFormat('EEE dd MMM, HH:mm', lang);
     final tColor = deliveryTypeColor(task.type);
     final sColor = deliveryStatusColor(task.status);
-    final offTrack = task.status.journeyIndex < 0;
+    final offTrack = task.status.journeyIndexFor(task.type) < 0;
 
     return SoftCard(
       padding: const EdgeInsets.all(16),
@@ -128,9 +137,15 @@ class DriverTaskCard extends StatelessWidget {
 
         const SizedBox(height: 12),
         // Address + schedule + phone
-        _line(Icons.location_on_rounded, '${context.t(task.isPickup ? 'Collect from' : 'Deliver to')}: ${task.address ?? context.t('No address on file')}'),
+        if (task.headingToBranch || task.status == DeliveryStatus.droppedOff)
+          _line(Icons.storefront_rounded, '${context.t('Drop off at branch')}: ${task.branchName ?? '—'}')
+        else
+          _line(Icons.location_on_rounded, '${context.t(task.isPickup ? 'Collect from' : 'Deliver to')}: ${task.address ?? context.t('No address on file')}'),
         if (task.scheduledAt != null) _line(Icons.event_rounded, '${context.t('Scheduled')}: ${df.format(task.scheduledAt!)}'),
-        if (task.completedAt != null) _line(Icons.check_circle_rounded, '${context.t('Done')}: ${df.format(task.completedAt!)}'),
+        if (task.collectedAt != null) _line(Icons.inventory_2_rounded, '${context.t('Collected')}: ${df.format(task.collectedAt!)}'),
+        if (task.droppedOffAt != null) _line(Icons.storefront_rounded, '${context.t('Handed over at branch')}: ${df.format(task.droppedOffAt!)}'),
+        if (task.receivedAt != null) _line(Icons.check_circle_rounded, '${context.t('Received at branch')}: ${df.format(task.receivedAt!)}')
+        else if (task.completedAt != null) _line(Icons.check_circle_rounded, '${context.t('Done')}: ${df.format(task.completedAt!)}'),
 
         const SizedBox(height: 12),
 
@@ -139,7 +154,7 @@ class DriverTaskCard extends StatelessWidget {
         else if (compact)
           _detailsHint(context)
         else ...[
-          _MiniJourney(status: task.status),
+          _MiniJourney(status: task.status, type: task.type),
           const SizedBox(height: 14),
           _actions(context),
         ],
@@ -158,7 +173,12 @@ class DriverTaskCard extends StatelessWidget {
   /// Overdue / Today priority chip (day-granularity, computed from the schedule) — only for
   /// on-track tasks, mirroring the web card. Upcoming shows nothing.
   Widget _urgencyChip(BuildContext context) {
-    if (task.status.journeyIndex < 0 || task.status == DeliveryStatus.completed) return const SizedBox.shrink();
+    if (task.status.journeyIndexFor(task.type) < 0 ||
+        task.status == DeliveryStatus.completed ||
+        task.status == DeliveryStatus.collected ||
+        task.status == DeliveryStatus.droppedOff) {
+      return const SizedBox.shrink(); // the stop itself is done
+    }
     final s = task.scheduledAt;
     if (s == null) return const SizedBox.shrink();
     final now = DateTime.now();
@@ -234,8 +254,13 @@ class DriverTaskCard extends StatelessWidget {
 
   Widget _actions(BuildContext context) {
     final buttons = <Widget>[];
-    // Navigate + Call are always available when we have coords / phone.
-    if (task.hasLocation) buttons.add(_ghostBtn(context, Icons.navigation_rounded, context.t('Navigate'), () => _navigate(context)));
+    // Navigate (in-app map + route) + Call are available when we have coords / phone. Once a
+    // pickup is collected the destination is the branch.
+    if (task.headingToBranch) {
+      buttons.add(_ghostBtn(context, Icons.navigation_rounded, context.t('Navigate to branch'), () => _navigate(context)));
+    } else if (task.hasLocation && task.status != DeliveryStatus.droppedOff) {
+      buttons.add(_ghostBtn(context, Icons.navigation_rounded, context.t('Navigate'), () => _navigate(context)));
+    }
     if ((task.contactPhone ?? '').isNotEmpty) buttons.add(_ghostBtn(context, Icons.call_rounded, context.t('Call'), () => _call(context)));
 
     switch (task.status) {
@@ -252,8 +277,19 @@ class DriverTaskCard extends StatelessWidget {
         buttons.add(_dangerBtn(context, context.t("Can't complete"), () => onAction?.call(DriverAction.fail)));
         break;
       case DeliveryStatus.arrived:
-        buttons.add(_primaryBtn(context, Icons.check_circle_rounded, context.t(task.isPickup ? 'Complete pickup' : 'Complete delivery'), AppColors.success, () => onAction?.call(DriverAction.complete)));
+        buttons.add(_primaryBtn(context, task.isPickup ? Icons.inventory_2_rounded : Icons.check_circle_rounded,
+            context.t(task.isPickup ? 'Mark collected' : 'Complete delivery'), AppColors.success, () => onAction?.call(DriverAction.complete)));
         buttons.add(_dangerBtn(context, context.t("Can't complete"), () => onAction?.call(DriverAction.fail)));
+        break;
+      case DeliveryStatus.collected:
+        buttons.add(_primaryBtn(context, Icons.storefront_rounded, context.t('Handed over at branch'), AppColors.primary, () => onAction?.call(DriverAction.dropOff)));
+        break;
+      case DeliveryStatus.droppedOff:
+        buttons.add(Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.hourglass_top_rounded, size: 16, color: AppColors.muted),
+          const SizedBox(width: 6),
+          Flexible(child: Text(context.t('Waiting for the branch to confirm receipt.'), style: TextStyle(color: AppColors.muted, fontSize: 12.5, fontWeight: FontWeight.w600))),
+        ]));
         break;
       default:
         break;
@@ -262,8 +298,19 @@ class DriverTaskCard extends StatelessWidget {
     return Wrap(spacing: 8, runSpacing: 8, children: buttons);
   }
 
-  Future<void> _navigate(BuildContext context) =>
-      _launch(context, Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${task.lat},${task.lng}'), external: true);
+  /// In-app navigation (map, live position, road route) — no hand-off to an external maps app.
+  Future<void> _navigate(BuildContext context) {
+    final toBranch = task.headingToBranch;
+    return NavigationScreen.open(
+      context,
+      destination: toBranch ? LatLng(task.branchLat!, task.branchLng!) : LatLng(task.lat!, task.lng!),
+      title: toBranch ? (task.branchName ?? context.t('Branch')) : (task.customerName ?? task.orderNumber ?? context.t('Destination')),
+      subtitle: '${task.orderNumber ?? ''} · ${context.t(toBranch ? 'Drop off at branch' : (task.isPickup ? 'Collect from' : 'Deliver to'))}',
+      address: toBranch ? task.branchName : task.address,
+      phone: toBranch ? null : task.contactPhone,
+      color: deliveryTypeColor(task.type),
+    );
+  }
 
   Future<void> _call(BuildContext context) =>
       _launch(context, Uri(scheme: 'tel', path: task.contactPhone), external: false);
@@ -300,10 +347,12 @@ class DriverTaskCard extends StatelessWidget {
       );
 }
 
-/// Compact horizontal 5-node journey: New → Accepted → In transit → Arrived → Done.
+/// Compact horizontal journey. Delivery: New → Accepted → In transit → Arrived → Done.
+/// Pickup: … → Arrived → Collected → At branch → Received (the branch confirms receipt).
 class _MiniJourney extends StatelessWidget {
-  const _MiniJourney({required this.status});
+  const _MiniJourney({required this.status, required this.type});
   final DeliveryStatus status;
+  final DeliveryType type;
 
   static const _labels = ['New', 'Accepted', 'In transit', 'Arrived', 'Done'];
   static const _icons = [
@@ -313,35 +362,53 @@ class _MiniJourney extends StatelessWidget {
     Icons.where_to_vote_rounded,
     Icons.check_circle_rounded,
   ];
+  static const _pickupLabels = ['New', 'Accepted', 'In transit', 'Arrived', 'Collected', 'At branch', 'Received'];
+  static const _pickupIcons = [
+    Icons.fiber_new_rounded,
+    Icons.thumb_up_rounded,
+    Icons.local_shipping_rounded,
+    Icons.where_to_vote_rounded,
+    Icons.inventory_2_rounded,
+    Icons.storefront_rounded,
+    Icons.check_circle_rounded,
+  ];
+
+  bool get _pickup => type == DeliveryType.pickup;
 
   @override
   Widget build(BuildContext context) {
-    final current = status.journeyIndex;
+    final current = status.journeyIndexFor(type);
+    final n = _pickup ? _pickupLabels.length : _labels.length;
     return Row(
       children: [
-        for (var i = 0; i < 5; i++) ...[
-          _node(context, i, current),
-          if (i < 4) Expanded(child: Container(height: 2.5, color: i < current ? AppColors.primary : AppColors.line)),
+        for (var i = 0; i < n; i++) ...[
+          _node(context, i, current, n),
+          if (i < n - 1) Expanded(child: Container(height: 2.5, color: i < current ? AppColors.primary : AppColors.line)),
         ],
       ],
     );
   }
 
-  Widget _node(BuildContext context, int i, int current) {
-    final done = i < current;
-    final active = i == current;
+  Widget _node(BuildContext context, int i, int current, int n) {
+    // The last node, once reached, is the finished state — done, not "active".
+    final done = i < current || (i == current && i == n - 1);
+    final active = i == current && !done;
+    final labels = _pickup ? _pickupLabels : _labels;
+    final icons = _pickup ? _pickupIcons : _icons;
+    final size = n > 5 ? 26.0 : 30.0;
+    final labelW = n > 5 ? 42.0 : 54.0;
     final color = done ? AppColors.primary : (active ? AppColors.gold : AppColors.line);
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        width: 30,
-        height: 30,
+        width: size,
+        height: size,
         decoration: BoxDecoration(color: color, shape: BoxShape.circle, boxShadow: active ? AppShadows.glow(AppColors.goldDark) : null),
-        child: Icon(done ? Icons.check_rounded : _icons[i], size: 15, color: done ? Colors.white : (active ? AppColors.onGold : AppColors.faint)),
+        child: Icon(done ? Icons.check_rounded : icons[i], size: 15, color: done ? Colors.white : (active ? AppColors.onGold : AppColors.faint)),
       ),
       const SizedBox(height: 3),
       SizedBox(
-        width: 54,
-        child: Text(context.t(_labels[i]),
+        width: labelW,
+        child: Text(context.t(labels[i]),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

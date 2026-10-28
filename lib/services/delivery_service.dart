@@ -90,6 +90,13 @@ class DeliveryService {
     if (!isOk(res)) throw ApiException.from(res);
   }
 
+  /// Pickup leg: the collected laundry was handed over at the branch (Collected → Dropped off).
+  /// The branch then confirms receipt. Idempotent server-side.
+  Future<void> dropOff(String id) async {
+    final res = await _api.dio.post('/api/deliveries/$id/dropoff');
+    if (!isOk(res)) throw ApiException.from(res);
+  }
+
   /// POST /api/deliveries/location — geofence heartbeat. Returns order numbers that auto-arrived.
   Future<List<String>> location(double lat, double lng) async {
     try {

@@ -199,10 +199,20 @@ class _NextStep extends StatelessWidget {
         break;
       case DeliveryStatus.arrived:
         icon = Icons.check_circle_rounded;
-        title = context.t(task.isPickup ? 'Complete the pickup' : 'Complete the delivery');
+        title = context.t(task.isPickup ? 'Collect the items' : 'Complete the delivery');
         text = task.isPickup
-            ? context.t('Check the items with the customer, attach a photo if you like, then complete.')
+            ? context.t('Check the items with the customer, attach a photo if you like, then mark them collected.')
             : context.t(collect ? 'Hand over the items, collect the balance due, then complete with a proof photo.' : 'Hand over the items, then complete with a proof photo.');
+        break;
+      case DeliveryStatus.collected:
+        icon = Icons.storefront_rounded;
+        title = context.t('Take the items to the branch');
+        text = context.t('Drive to the branch and tap “Handed over at branch” once the staff have the laundry.');
+        break;
+      case DeliveryStatus.droppedOff:
+        icon = Icons.hourglass_top_rounded;
+        title = context.t('Waiting for the branch');
+        text = context.t('You handed the laundry over. The branch will confirm receipt; nothing else to do here.');
         break;
       case DeliveryStatus.pending:
         icon = Icons.schedule_rounded;

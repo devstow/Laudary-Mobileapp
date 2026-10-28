@@ -59,6 +59,7 @@ class OrderDetail {
     this.canDelete = false,
     this.canEdit = false,
     required this.invoiceStatus,
+    this.pickupMethod = PickupMethod.driverPickup,
   });
 
   final String id;
@@ -99,6 +100,10 @@ class OrderDetail {
   /// Invoice status derived from the order lifecycle (for the badge).
   final OrderInvoiceStatus invoiceStatus;
 
+  /// Driver pickup or customer drop-off at the branch.
+  final PickupMethod pickupMethod;
+  bool get isDropOff => type == OrderType.pickupAndDelivery && pickupMethod == PickupMethod.customerDropOff;
+
   bool get isExpress => speed == ServiceSpeed.express;
   bool get hasPickupPin => pickupLat != null && pickupLng != null;
   bool get hasDeliveryPin => deliveryLat != null && deliveryLng != null;
@@ -106,6 +111,7 @@ class OrderDetail {
   /// Customer may reschedule the pickup only before it's collected.
   bool get canReschedule =>
       type == OrderType.pickupAndDelivery &&
+      !isDropOff &&
       const {OrderStatus.draft, OrderStatus.placed, OrderStatus.pickupScheduled}.contains(status);
 
   /// Customer may pick a delivery slot once the order is ready.
@@ -151,5 +157,6 @@ class OrderDetail {
         canDelete: j['canDelete'] as bool? ?? false,
         canEdit: j['canEdit'] as bool? ?? false,
         invoiceStatus: OrderInvoiceStatus.from((j['invoiceStatus'] as num?)?.toInt()),
+        pickupMethod: PickupMethod.from((j['pickupMethod'] as num?)?.toInt()),
       );
 }

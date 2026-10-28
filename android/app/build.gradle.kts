@@ -31,7 +31,7 @@ android {
     defaultConfig {
         // Keep this id stable: changing it turns every future build into a different app that
         // cannot update an existing installation (users would have to uninstall first).
-        applicationId = "com.example.mobileapp"
+        applicationId = "com.cyberstackmedia.smartwash"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Version + build number come from pubspec.yaml ("version: x.y.z+n") — the single source.

@@ -24,6 +24,13 @@ class DeliveryTask {
     this.lat,
     this.lng,
     this.awaitingCustomerSlot = false,
+    this.collectedAt,
+    this.droppedOffAt,
+    this.receivedAt,
+    this.branchName,
+    this.branchLat,
+    this.branchLng,
+    this.pickupMethod = PickupMethod.driverPickup,
   });
 
   final String id;
@@ -45,9 +52,22 @@ class DeliveryTask {
   final double? lat;
   final double? lng;
   final bool awaitingCustomerSlot;
+  final DateTime? collectedAt;
+  final DateTime? droppedOffAt;
+  final DateTime? receivedAt;
+
+  /// The branch the laundry goes to (the destination once a pickup is collected).
+  final String? branchName;
+  final double? branchLat;
+  final double? branchLng;
+  final PickupMethod pickupMethod;
 
   bool get hasLocation => lat != null && lng != null;
   bool get isPickup => type == DeliveryType.pickup;
+  bool get hasBranchLocation => branchLat != null && branchLng != null;
+
+  /// After collecting a pickup the next stop is the branch, not the customer.
+  bool get headingToBranch => isPickup && status == DeliveryStatus.collected && hasBranchLocation;
 
   static double? _dn(dynamic v) => v == null ? null : (v as num).toDouble();
   static DateTime? _dt(dynamic v) => v == null ? null : DateTime.tryParse(v as String)?.toLocal();
@@ -72,6 +92,13 @@ class DeliveryTask {
         lat: _dn(j['latitude']),
         lng: _dn(j['longitude']),
         awaitingCustomerSlot: j['awaitingCustomerSlot'] as bool? ?? false,
+        collectedAt: _dt(j['collectedAt']),
+        droppedOffAt: _dt(j['droppedOffAt']),
+        receivedAt: _dt(j['receivedAt']),
+        branchName: j['branchName'] as String?,
+        branchLat: _dn(j['branchLatitude']),
+        branchLng: _dn(j['branchLongitude']),
+        pickupMethod: PickupMethod.from((j['pickupMethod'] as num?)?.toInt()),
       );
 }
 

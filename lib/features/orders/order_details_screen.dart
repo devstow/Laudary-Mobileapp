@@ -22,6 +22,7 @@ import '../../widgets/map_viewer.dart';
 import '../../widgets/order_timeline.dart';
 import '../../widgets/ui.dart';
 import '../assistant/assistant_screen.dart';
+import '../navigation/navigation_screen.dart';
 import '../invoice/invoice_screen.dart';
 import '../receipt/receipt_screen.dart';
 import '../neworder/new_order_screen.dart';
@@ -197,10 +198,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
-  Future<void> _openMaps(double lat, double lng) async {
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
+  /// In-app map with the route from where you are (no external maps app).
+  Future<void> _openMaps(double lat, double lng, {required String title, String? address}) =>
+      NavigationScreen.open(context, destination: LatLng(lat, lng), title: title, subtitle: _order?.orderNumber, address: address);
 
   // ── build ────────────────────────────────────────────────────────────────
   @override
@@ -287,7 +287,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           _AccordionSection(
             title: context.t('Tracking'),
             icon: Icons.route_rounded,
-            child: Padding(padding: const EdgeInsets.only(top: 4), child: JourneyStepper(status: o.status, type: o.type)),
+            child: Padding(padding: const EdgeInsets.only(top: 4), child: JourneyStepper(status: o.status, type: o.type, pickupMethod: o.pickupMethod, events: _timeline)),
           ),
           const SizedBox(height: 12),
         ],
@@ -318,10 +318,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               ],
               if (o.pickupAddress != null && o.pickupAddress!.isNotEmpty)
                 InfoRow(icon: Icons.trip_origin_rounded, label: context.t('Pickup'), value: o.pickupAddress!,
-                    onTap: o.hasPickupPin ? () => _openMaps(o.pickupLat!, o.pickupLng!) : null),
+                    onTap: o.hasPickupPin ? () => _openMaps(o.pickupLat!, o.pickupLng!, title: context.t('Pickup location'), address: o.pickupAddress) : null),
               if (o.deliveryAddress != null && o.deliveryAddress!.isNotEmpty && o.deliveryAddress != o.pickupAddress)
                 InfoRow(icon: Icons.flag_rounded, label: context.t('Delivery'), value: o.deliveryAddress!,
-                    onTap: o.hasDeliveryPin ? () => _openMaps(o.deliveryLat!, o.deliveryLng!) : null),
+                    onTap: o.hasDeliveryPin ? () => _openMaps(o.deliveryLat!, o.deliveryLng!, title: context.t('Delivery location'), address: o.deliveryAddress) : null),
               if (o.contactPhone != null && o.contactPhone!.isNotEmpty)
                 InfoRow(icon: Icons.phone_rounded, label: context.t('Contact'), value: o.contactPhone!,
                     valueColor: AppColors.primary, onTap: () => _call(o.contactPhone!)),
@@ -416,6 +416,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         return context.t('Driver on the way');
       case DeliveryStatus.arrived:
         return context.t('Driver arrived');
+      case DeliveryStatus.collected:
+        return context.t('Picked up · on the way to the branch');
+      case DeliveryStatus.droppedOff:
+        return context.t('At the branch · being checked in');
       case DeliveryStatus.completed:
         return context.t('Completed');
       case DeliveryStatus.failed:

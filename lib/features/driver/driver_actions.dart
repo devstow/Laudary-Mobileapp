@@ -39,7 +39,11 @@ Future<bool> runDriverAction(BuildContext context, DeliveryService svc, Delivery
     case DriverAction.complete:
       final proof = await _promptProof(context, task);
       if (proof == null || !context.mounted) return false; // cancelled
-      return _run(context, () => svc.complete(task.id, proofImagePath: proof.path), context.t('Task completed'));
+      // On a pickup this records the COLLECTION; the branch confirms receipt later.
+      return _run(context, () => svc.complete(task.id, proofImagePath: proof.path),
+          context.t(task.isPickup ? 'Marked as collected' : 'Task completed'));
+    case DriverAction.dropOff:
+      return _run(context, () => svc.dropOff(task.id), context.t('Handed over at the branch'));
   }
 }
 
@@ -113,7 +117,7 @@ Future<_Proof?> _promptProof(BuildContext context, DeliveryTask task) {
           Center(
             child: Container(width: 42, height: 4, margin: const EdgeInsets.only(bottom: 16), decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4))),
           ),
-          Text(ctx.t(task.isPickup ? 'Complete pickup' : 'Complete delivery'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          Text(ctx.t(task.isPickup ? 'Mark collected' : 'Complete delivery'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
           const SizedBox(height: 4),
           Text(ctx.t('Attach a proof photo (optional), then confirm.'), style: TextStyle(color: AppColors.muted, fontSize: 13)),
           const SizedBox(height: 18),
@@ -126,7 +130,7 @@ Future<_Proof?> _promptProof(BuildContext context, DeliveryTask task) {
           ElevatedButton.icon(
             onPressed: () => Navigator.of(ctx).pop(const _Proof(null)),
             icon: const Icon(Icons.check_rounded),
-            label: Text(ctx.t('Complete without photo')),
+            label: Text(ctx.t(task.isPickup ? 'Collected without photo' : 'Complete without photo')),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, minimumSize: const Size.fromHeight(52)),
           ),
           const SizedBox(height: 8),

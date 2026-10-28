@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../core/api_client.dart';
+import '../models/enums.dart';
 import '../models/map_settings.dart';
 import '../models/order.dart';
 import '../models/order_detail.dart';
@@ -47,7 +48,8 @@ class OrderService {
 
   /// POST /api/portal/orders — book a pickup (Pickup & Delivery request).
   Future<String> bookPickup({
-    required DateTime pickupAt,
+    DateTime? pickupAt,
+    PickupMethod pickupMethod = PickupMethod.driverPickup,
     String? pickupAddress,
     double? lat,
     double? lng,
@@ -56,7 +58,9 @@ class OrderService {
     required List<({String serviceId, int quantity, String? notes})> items,
   }) async {
     final data = <String, dynamic>{
-      'pickupAt': pickupAt.toUtc().toIso8601String(),
+      // A driver pickup needs a time; a customer drop-off at the branch doesn't.
+      if (pickupAt != null) 'pickupAt': pickupAt.toUtc().toIso8601String(),
+      'pickupMethod': pickupMethod.value,
       'items': items.map((i) {
         final m = <String, dynamic>{'serviceId': i.serviceId, 'quantity': i.quantity};
         if (i.notes != null) m['notes'] = i.notes;
@@ -77,7 +81,7 @@ class OrderService {
   /// PUT /api/portal/orders/{id} — edit my own order (only before collection; server-enforced).
   Future<void> updateOrder({
     required String orderId,
-    required DateTime pickupAt,
+    DateTime? pickupAt,
     String? pickupAddress,
     double? lat,
     double? lng,
@@ -86,7 +90,7 @@ class OrderService {
     required List<({String serviceId, int quantity, String? notes})> items,
   }) async {
     final data = <String, dynamic>{
-      'pickupAt': pickupAt.toUtc().toIso8601String(),
+      if (pickupAt != null) 'pickupAt': pickupAt.toUtc().toIso8601String(),
       'items': items.map((i) {
         final m = <String, dynamic>{'serviceId': i.serviceId, 'quantity': i.quantity};
         if (i.notes != null) m['notes'] = i.notes;

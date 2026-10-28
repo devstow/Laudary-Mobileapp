@@ -35,6 +35,9 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   DateTime? _pickupAt;
   LatLng? _pin;
+  /// Driver pickup (needs a time) or customer drop-off at the branch (no driver, no time).
+  PickupMethod _method = PickupMethod.driverPickup;
+  bool get _isDropOff => _method == PickupMethod.customerDropOff;
 
   final _address = TextEditingController();
   final _phone = TextEditingController();
@@ -75,6 +78,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       );
     }
     _pickupAt = o.pickupAt;
+    _method = o.pickupMethod;
     if (o.hasPickupPin) _pin = LatLng(o.pickupLat!, o.pickupLng!);
     _address.text = o.pickupAddress ?? '';
     _phone.text = o.contactPhone ?? '';
@@ -114,7 +118,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   int get _serviceCount => _qty.values.where((q) => q > 0).length;
   bool get _hasServices => _serviceCount > 0;
-  bool get _hasTime => _pickupAt != null;
+  bool get _hasTime => _isDropOff || _pickupAt != null;
 
   Future<void> _openServicePicker() async {
     final result = await Navigator.of(context).push<ServiceSelection>(
@@ -175,7 +179,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         estimate: _estimate,
         currency: currency,
         lang: lang,
-        pickupAt: _pickupAt!,
+        pickupAt: _isDropOff ? null : _pickupAt,
+        dropOff: _isDropOff,
         address: _address.text.trim(),
         pin: _pin,
         phone: _phone.text.trim(),
@@ -200,19 +205,21 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       if (_isEdit) {
         await svc.updateOrder(
           orderId: widget.editOrder!.id,
-          pickupAt: _pickupAt!, pickupAddress: addr, lat: _pin?.latitude, lng: _pin?.longitude,
+          pickupAt: _isDropOff ? null : _pickupAt, pickupAddress: addr, lat: _pin?.latitude, lng: _pin?.longitude,
           contactPhone: phone, notes: notes, items: items,
         );
       } else {
         await svc.bookPickup(
-          pickupAt: _pickupAt!, pickupAddress: addr, lat: _pin?.latitude, lng: _pin?.longitude,
+          pickupAt: _isDropOff ? null : _pickupAt, pickupMethod: _method, pickupAddress: addr, lat: _pin?.latitude, lng: _pin?.longitude,
           contactPhone: phone, notes: notes, items: items,
         );
       }
       if (!mounted) return;
       showToast(context, _isEdit
           ? context.t('Your order has been updated.')
-          : context.t("Your pickup request has been placed. We'll be in touch to collect your items."));
+          : _isDropOff
+              ? context.t("Your order has been placed. Bring your items to the branch; we'll let you know once they're received.")
+              : context.t("Your pickup request has been placed. We'll be in touch to collect your items."));
       Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) showToast(context, ApiException.from(e).message, error: true);
@@ -259,7 +266,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           Container(key: _timeKey),
           _stepLabel('3', context.t('Pickup time & contact')),
           const SizedBox(height: 12),
-          _timeCard(df),
+          if (!_isEdit) ...[
+            _methodChooser(),
+            const SizedBox(height: 12),
+          ] else if (_isDropOff) ...[
+            _dropOffNote(context.t('You chose to drop this order off at the branch.')),
+            const SizedBox(height: 12),
+          ],
+          if (!_isDropOff) _timeCard(df),
           if (_showErrors && !_hasTime) _fieldError(context.t('Please choose your preferred pickup time.')),
           const SizedBox(height: 12),
           TextField(
@@ -430,6 +444,57 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         ]),
       );
 
+  /// "Pick it up from me" vs "I'll drop it off at the branch".
+  Widget _methodChooser() {
+    Widget option(PickupMethod m, IconData icon, String label) {
+      final on = _method == m;
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.control),
+          onTap: () => setState(() => _method = m),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+            decoration: BoxDecoration(
+              color: on ? AppColors.primarySoft : AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.control),
+              border: Border.all(color: on ? AppColors.primary : AppColors.line, width: on ? 1.6 : 1),
+            ),
+            child: Column(children: [
+              Icon(icon, color: on ? AppColors.primary : AppColors.muted, size: 24),
+              const SizedBox(height: 6),
+              Text(label, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: on ? AppColors.primary : AppColors.ink)),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(context.t('How will we get your laundry?'), style: TextStyle(color: AppColors.muted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      Row(children: [
+        option(PickupMethod.driverPickup, Icons.local_shipping_rounded, context.t('Pick it up from me')),
+        const SizedBox(width: 10),
+        option(PickupMethod.customerDropOff, Icons.storefront_rounded, context.t("I'll drop it off at the branch")),
+      ]),
+      if (_isDropOff) ...[
+        const SizedBox(height: 10),
+        _dropOffNote(context.t("No driver will be sent. Bring your items to the branch; we'll let you know once they're received.")),
+      ],
+    ]);
+  }
+
+  Widget _dropOffNote(String text) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(AppRadius.control)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.storefront_rounded, size: 18, color: AppColors.info),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(color: AppColors.inkSoft, fontSize: 12.5, height: 1.35))),
+        ]),
+      );
+
   Widget _timeCard(DateFormat df) {
     final set = _pickupAt != null;
     final error = _showErrors && !set;
@@ -510,6 +575,7 @@ class _ConfirmSheet extends StatelessWidget {
     required this.currency,
     required this.lang,
     required this.pickupAt,
+    this.dropOff = false,
     required this.address,
     required this.pin,
     required this.phone,
@@ -520,7 +586,8 @@ class _ConfirmSheet extends StatelessWidget {
   final double estimate;
   final String currency;
   final String lang;
-  final DateTime pickupAt;
+  final DateTime? pickupAt;
+  final bool dropOff;
   final String address;
   final LatLng? pin;
   final String phone;
@@ -572,7 +639,10 @@ class _ConfirmSheet extends StatelessWidget {
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1)),
             MoneyRow(context.t('Estimated total'), money(estimate, currency, lang), strong: true, accent: true),
             const SizedBox(height: 10),
-            InfoRow(icon: Icons.event_rounded, label: context.t('Pickup time'), value: df.format(pickupAt)),
+            if (dropOff)
+              InfoRow(icon: Icons.storefront_rounded, label: context.t('Pickup method'), value: context.t("I'll drop it off at the branch"))
+            else if (pickupAt != null)
+              InfoRow(icon: Icons.event_rounded, label: context.t('Pickup time'), value: df.format(pickupAt!)),
             if (address.isNotEmpty) InfoRow(icon: Icons.location_on_rounded, label: context.t('Pickup address'), value: address),
             if (pin != null)
               InfoRow(icon: Icons.my_location_rounded, label: context.t('Pinned at'),

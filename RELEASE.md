@@ -55,18 +55,29 @@ cd D:\Source\MobileApp
 
 What the script checks/does: `key.properties` + keystore present, `env/staging.json` has an HTTPS URL,
 version read from `pubspec.yaml`, build number above what the landing page already serves
-(`/download/android/info`), then `flutter build apk --release --target-platform android-arm,android-arm64
---dart-define-from-file=env/staging.json` (ARM only — x86_64 was a third of the file and only serves
-emulators). After the build it **verifies the APK** with `apksigner` / `aapt` and aborts on any failure:
+(`/download/android/info`), then `flutter build apk --release --split-per-abi --target-platform
+android-arm,android-arm64 --obfuscate --split-debug-info=build/symbols/<version>` — **one APK per architecture**
+(64-bit ARM ≈ 19 MB is the download every phone since 2017 gets; 32-bit ARM ≈ 17 MB is offered as a fallback link).
+Half the size of a universal build, which is what decides whether a download on slow mobile data completes.
+Each APK is then **re-signed with `apksigner`** so the v1, v2 and v3 schemes are all present (Gradle drops v1 for
+minSdk 24; some installers still want it) and **verified**, aborting on any failure:
 
-* exactly one signer, certificate fingerprint equal to `tool/release-cert.sha256` (the release key), v2/v3 schemes;
-* application id and `versionCode`/`versionName` equal to `pubspec.yaml`; not debuggable / testOnly;
-* `arm64-v8a` and `armeabi-v7a` libraries present.
+* exactly one signer, certificate fingerprint equal to `tool/release-cert.sha256` (the release key), v1+v2+v3;
+* 16 KB page alignment (`zipalign -c -P 16`), application id and version equal to `pubspec.yaml` (split APKs carry
+  `versionCode = abiIndex*1000 + build`), not debuggable / testOnly, the architecture's libraries present;
+* **on-device install**: when a phone or emulator is attached (`adb devices`), the matching APK is installed with
+  `adb install -r` and the package is checked to be present — exactly what a phone does before it says "App not
+  installed". No device → a warning (pass `-SkipDeviceInstall` to silence it deliberately).
 
-Only then it copies the APK to `dist/<env>/smartwash.apk` and writes `smartwash.json` (`version`, `buildNumber`,
-`applicationId`, `environment`, `apiBaseUrl`, `sizeBytes`, `sha256`, `certSha256`, `abis`, `minSdk`,
-`targetSdk`, `builtAtUtc`). The landing page shows the version/size/date from this file and names the download
-`SmartWash-<version>-<build>.apk`. `dist/` is git-ignored — APKs are never committed.
+Only then it writes `dist/<env>/smartwash.apk` + `smartwash.json` and `smartwash-armeabi-v7a.apk` + its json
+(`version`, `buildNumber`, `versionCode`, `applicationId`, `environment`, `apiBaseUrl`, `abi`, `abis`, `sizeBytes`,
+`sha256`, `certSha256`, `signatureSchemes`, `minSdk`, `targetSdk`, `builtAtUtc`). The landing page shows the
+version/size/date from the primary json and names the downloads `SmartWash-<version>-<build>.apk` /
+`…-32bit.apk`. Keep `build/symbols/<version>` to de-obfuscate crash stacks. `dist/` is git-ignored.
+
+Application id: `com.cyberstackmedia.smartwash` (changed from the `com.example.mobileapp` placeholder on
+2026-10-28 so a leftover debug-key build of the placeholder id on a tester's phone can never block the release
+install again). Debug builds use `.debug`.
 
 `tool/release-cert.sha256` is the pin. If the signing key is ever replaced on purpose, change the pin in the same
 commit — and know that every phone with the old key's app must uninstall it first (Android never updates across keys).
@@ -119,7 +130,8 @@ stay logged in.
 | "App not installed" | Android shows this one line for several different failures. Check in this order: **(1) Incomplete download** — the file in *Downloads* must be named `SmartWash-<version>-<build>.apk` and be exactly the size the landing page shows (`/download/android/info` has the bytes + SHA-256). Slow or dropped mobile connections leave a shorter file, and an old `SmartWash-1.0.0.apk` next to it is easy to tap by mistake. Delete, re-download on Wi-Fi. (Server side: the web app disables Kestrel's minimum-data-rate abort for this endpoint and supports ranged resumes keyed on the ETag.) **(2) Different signing key** — the phone already has `com.example.mobileapp` signed with another key: a debug build from `flutter run` / `app-debug.apk` made before debug builds got the `.debug` id, or a release built before `key.properties` existed. Android never replaces an app across keys. Fix once: *Settings → Apps → Smart Wash / mobileapp → Uninstall*, then install the download. The build script now refuses to package anything not signed with the pinned release certificate, so a published APK can't cause this again. **(3) Downgrade** — build number not above the installed one; the build and publish scripts refuse to ship a number ≤ the published one. **(4)** Android < 7.0 (`minSdk 24`) or no free storage. Exact reason from a PC: `adb install -r dist\staging\smartwash.apk` prints e.g. `INSTALL_FAILED_UPDATE_INCOMPATIBLE` / `INSTALL_FAILED_VERSION_DOWNGRADE` / `INSTALL_PARSE_FAILED_NOT_APK`. |
 | "Network error. Please check your connection." on every screen | API unreachable from the phone: `https://smartwash-staging-api.20-203-96-110.nip.io/health` in the phone's browser. |
 | Password reset says email is not set up | The staging API has no SMTP configured yet (platform setting); other flows are unaffected. |
-| APK size | ~37 MB: arm64-v8a + armeabi-v7a (every real phone). x86_64 is deliberately left out (emulators only; it was ~20 MB). `--split-per-abi` would halve it again but then two files must be published and users must pick the right one — not worth an extra "App not installed" path. |
+| APK size | ~19 MB (64-bit) / ~17 MB (32-bit), one file per architecture, Dart obfuscated. The landing page's main button serves the 64-bit file (every phone since 2017); the 32-bit link under it is for old devices. Staging logs showed a 37 MB universal file taking 16 minutes on a tester's connection with the parallel connections dropping — size is the main cause of truncated downloads. |
+| `build_release_apk.ps1`: "adb install FAILED" | The exact reason a phone would show as "App not installed" (`INSTALL_FAILED_UPDATE_INCOMPATIBLE` = different signing key on the device, `INSTALL_FAILED_VERSION_DOWNGRADE`, `INSTALL_PARSE_FAILED_NO_CERTIFICATES`, …). Fix the cause; never publish around it. |
 | `build_release_apk.ps1`: "signed with the WRONG certificate" | `key.properties` points at a different keystore than the pinned one in `tool/release-cert.sha256`. Restore the original keystore; do not change the pin unless the key is being replaced on purpose. |
 | `build_release_apk.ps1` / `publish_apk.ps1`: "already serves build N" | Bump `version: x.y.z+N` in `pubspec.yaml` — phones refuse to install a build number that is not higher than the installed one. |
 | `publish_apk.ps1`: "PUBLIC DOWNLOAD DIFFERS" | Something between the server folder and the browser (proxy, cache, partial swap) altered the file. Nothing was handed to users that matches the build — fix the server path, re-run. |
