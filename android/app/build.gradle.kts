@@ -23,6 +23,16 @@ android {
     // auto-downloading a corrupt copy of flutter.ndkVersion (28.2.13676358).
     ndkVersion = "30.0.15729638"
 
+    // Compress native libraries inside the APK (extracted at install time). The universal APK carries the
+    // Flutter engine + app for arm64, armv7 and x86_64; stored uncompressed that is a ~54 MB download, which
+    // is what truncates on slow mobile data and then fails with "App not installed". Compressed it is about
+    // half. Extracted libraries also work on 16 KB-page devices (Android 15+).
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

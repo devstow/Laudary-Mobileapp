@@ -5,16 +5,20 @@
 .DESCRIPTION
   1. Refuses to run without android/key.properties (release signing) - a debug-signed APK must never be distributed.
   2. Injects the environment's API URL from env/<Env>.json via --dart-define-from-file (the ONLY place it is set).
-  3. Builds one APK PER ARCHITECTURE (64-bit ARM = the download every modern phone gets, 32-bit ARM as a
-     fallback) with Dart obfuscation + split debug info: about half the size of a universal build, which is what
-     decides whether a download on slow mobile data completes ("App not installed" = truncated file).
+  3. Builds ONE UNIVERSAL APK (64-bit ARM + 32-bit ARM + x86_64) with Dart obfuscation + split debug info.
+     A browser cannot tell which CPU a phone has, so the single file behind the Download button and the QR code
+     must install on EVERY compatible device: the earlier per-ABI split served a 64-bit-only file that 32-bit
+     Android phones (many budget / Android Go devices) reject with "App not installed" (2026-10-28).
   4. Re-signs each APK with apksigner so v1 + v2 + v3 signature schemes are ALL present (Gradle drops v1 for
      minSdk 24; some installers still want it), then VERIFIES: pinned release certificate, 16 KB zip alignment,
      application id and version, not debuggable, the expected native libraries.
-  5. Installs the APK on a connected device or emulator (adb) and checks the package is present - the same
-     thing a phone does - before anything is written to dist/. Skipped with a warning when no device is attached.
-  6. Produces dist/<Env>/smartwash.apk (+ .json) and dist/<Env>/smartwash-armeabi-v7a.apk (+ .json) - the files
-     tool/publish_apk.ps1 uploads and the SaaS landing page reads.
+  5. Optional early check: installs the APK on an attached device (adb). The AUTHORITATIVE, mandatory gate is in
+     tool/publish_apk.ps1, which installs the file DOWNLOADED FROM STAGING before it is made public.
+  6. Produces dist/<Env>/smartwash.apk (+ .json) - the file tool/publish_apk.ps1 uploads.
+
+  Version code: a universal APK's versionCode is the pubspec build number itself. It must stay ABOVE every
+  versionCode ever published (the old per-ABI builds used 1000+N / 2000+N, e.g. 2008), otherwise Android treats
+  the update as a downgrade and shows "App not installed". The script enforces this.
 
   Version and build number come from pubspec.yaml ("version: 1.0.0+1"). Bump them there before every
   public release; Android only installs an update when the build number (+n) increases.
@@ -87,8 +91,16 @@ $live = $null
 if (-not $SkipServerCheck -and $PublicInfoUrl) {
     try { $live = Invoke-RestMethod -Uri $PublicInfoUrl -TimeoutSec 20 -Headers @{ 'Cache-Control' = 'no-cache' } }
     catch { Write-Warning "Could not read $PublicInfoUrl ($($_.Exception.Message)); skipping the downgrade check." }
-    if ($live -and $live.buildNumber -and [int]$live.buildNumber -ge $build) {
-        throw "The landing page already serves build $($live.buildNumber) ($($live.version)). Android refuses to install build $build over it - bump 'version: x.y.z+N' in pubspec.yaml and rebuild."
+    if ($live -and $live.buildNumber) {
+        # versionCode of what phones may have installed: per-ABI split builds were abiIndex*1000 + N.
+        $liveAbi = [string]$live.abi
+        $liveCode = [int]$live.buildNumber + $(switch ($liveAbi) { 'armeabi-v7a' { 1000 } 'arm64-v8a' { 2000 } 'x86_64' { 4000 } default { 0 } })
+        foreach ($vv in @($live.variants)) {
+            if ($vv -and $vv.buildNumber) { $c = [int]$vv.buildNumber + $(switch ([string]$vv.abi) { 'armeabi-v7a' { 1000 } 'arm64-v8a' { 2000 } 'x86_64' { 4000 } default { 0 } }); if ($c -gt $liveCode) { $liveCode = $c } }
+        }
+        if ($build -le $liveCode) {
+            throw "Phones may already have versionCode $liveCode installed (live: $($live.versionLabel), $liveAbi). This build's versionCode would be $build - Android refuses a downgrade ('App not installed'). Set 'version: x.y.z+N' with N > $liveCode in pubspec.yaml."
+        }
     }
 }
 
@@ -100,13 +112,16 @@ if ($live) { Write-Host "Landing page serves $($live.versionLabel) today; this b
 flutter pub get | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed.' }
 $symbols = Join-Path $root "build\symbols\$version+$build"
-flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --obfuscate "--split-debug-info=$symbols" "--dart-define-from-file=$envFile" | Out-Host
+flutter build apk --release --target-platform android-arm,android-arm64,android-x64 --obfuscate "--split-debug-info=$symbols" "--dart-define-from-file=$envFile" | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'flutter build apk failed.' }
 
+# One universal file: every ABI a compatible phone (or Chromebook / emulator) can have.
+$requiredAbis = @('arm64-v8a', 'armeabi-v7a', 'x86_64')
 $variants = @(
-    @{ Abi = 'arm64-v8a';   Source = 'app-arm64-v8a-release.apk';   File = 'smartwash.apk';              Json = 'smartwash.json';              Primary = $true },
-    @{ Abi = 'armeabi-v7a'; Source = 'app-armeabi-v7a-release.apk'; File = 'smartwash-armeabi-v7a.apk'; Json = 'smartwash-armeabi-v7a.json'; Primary = $false }
+    @{ Abi = 'universal'; Source = 'app-release.apk'; File = 'smartwash.apk'; Json = 'smartwash.json'; Primary = $true }
 )
+# Old per-ABI outputs must never be picked up by mistake.
+Remove-Item (Join-Path $OutDir 'smartwash-armeabi-v7a.*') -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $staging = Join-Path $root "build\release-signed"
 New-Item -ItemType Directory -Force $staging | Out-Null
@@ -141,12 +156,11 @@ try {
         $pkg = $Matches[1]; $code = [int]$Matches[2]; $name = $Matches[3]
         if ($pkg -ne $appId) { throw "APK package '$pkg' != build.gradle.kts applicationId '$appId'." }
         if ($name -ne $version) { throw "APK versionName $name != pubspec $version." }
-        # Flutter gives split APKs distinct versionCodes (abiIndex*1000 + build) so both can coexist in a store.
-        if (($code % 1000) -ne $build) { throw "APK versionCode $code does not end in the pubspec build number $build (stale build output?)." }
+        if ($code -ne $build) { throw "APK versionCode $code != pubspec build number $build (stale build output?)." }
         if ($badging -match 'application-debuggable' -or $badging -match "testOnly='-1'") { throw 'APK is debuggable/testOnly - this is not a distributable release build.' }
         if ($badging -notmatch "native-code:(.*)") { throw "$($v.Abi): APK has no native libraries." }
         $abis = @([regex]::Matches($Matches[1], "'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
-        if ($abis -notcontains $v.Abi) { throw "$($v.Abi) APK lacks its libraries (has: $($abis -join ', '))." }
+        foreach ($need in $requiredAbis) { if ($abis -notcontains $need) { throw "Universal APK lacks $need libraries (has: $($abis -join ', ')) - it would not install on those phones." } }
         $minSdk = if ($badging -match "sdkVersion:'(\d+)'") { [int]$Matches[1] } else { 0 }
         $targetSdk = if ($badging -match "targetSdkVersion:'(\d+)'") { [int]$Matches[1] } else { 0 }
         Write-Host "Verified $($v.Abi): v1+v2+v3, release cert $($certSha.Substring(0, 16))..., $pkg $name ($code), minSdk $minSdk, targetSdk $targetSdk, $([math]::Round((Get-Item $signed).Length / 1MB, 1)) MB" -ForegroundColor Green
@@ -165,7 +179,7 @@ if (-not $SkipDeviceInstall) {
     } else {
         $serial = $devices[0]
         $abilist = (& $adb -s $serial shell getprop ro.product.cpu.abilist 2>$null | Out-String).Trim()
-        $pick = $results | Where-Object { $abilist -like "*$($_.Variant.Abi)*" } | Select-Object -First 1
+        $pick = $results | Select-Object -First 1
         if (-not $pick) {
             Write-Warning "Device $serial ($abilist) runs neither ARM ABI; install check skipped."
         } else {
