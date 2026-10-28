@@ -20,7 +20,8 @@ import '../../widgets/ui.dart';
 import '../assistant/assistant_screen.dart';
 import '../notifications/notifications_screen.dart';
 import 'driver_task_detail_screen.dart';
-import 'geofence.dart';
+import 'location_tracker.dart';
+import 'tracking_status_card.dart';
 
 class DriverDashboardScreen extends StatefulWidget {
   const DriverDashboardScreen({super.key, required this.onOpenTasks});
@@ -31,10 +32,10 @@ class DriverDashboardScreen extends StatefulWidget {
 
 class _DriverDashboardScreenState extends State<DriverDashboardScreen> with WidgetsBindingObserver {
   late Future<DriverDashboard> _future;
-  late final GeofenceHeartbeat _geofence = GeofenceHeartbeat(context.read<DeliveryService>());
   int _unread = 0;
   Timer? _poll;
   StreamSubscription<RealtimeEvent>? _rt;
+  StreamSubscription<List<String>>? _arrivals;
 
   @override
   void initState() {
@@ -43,6 +44,12 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
     _future = _fetch();
     _loadUnread();
     _rt = context.read<RealtimeClient>().events.listen(_onRealtime);
+    // Location sharing runs for the whole session (LocationTracker); the server auto-marks "Arrived" from it.
+    _arrivals = context.read<LocationTracker>().arrivals.listen((orders) {
+      if (!mounted) return;
+      showToast(context, '${context.t('Arrived at')} ${orders.join(', ')}');
+      _refresh();
+    });
     _poll = Timer.periodic(const Duration(seconds: 20), (_) => _loadUnread());
   }
 
@@ -50,7 +57,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
   void dispose() {
     _poll?.cancel();
     _rt?.cancel();
-    _geofence.dispose();
+    _arrivals?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -61,16 +68,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
   }
 
   Future<DriverDashboard> _fetch() async {
-    final d = await context.read<DeliveryService>().dashboard();
-    _geofence.sync(
-      hasInTransit: d.active.any((t) => t.status == DeliveryStatus.inTransit),
-      onArrived: (orders) {
-        if (!mounted) return;
-        showToast(context, '${context.t('Arrived at')} ${orders.join(', ')}');
-        _refresh();
-      },
-    );
-    return d;
+    return context.read<DeliveryService>().dashboard();
   }
 
   Future<void> _refresh() async {
@@ -138,6 +136,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
                     }
                     final d = snap.data!;
                     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const TrackingStatusCard(),
+                      const SizedBox(height: 14),
                       _kpis(context, d),
                       const SizedBox(height: 18),
                       _quickActions(context),

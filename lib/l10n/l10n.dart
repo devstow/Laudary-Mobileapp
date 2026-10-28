@@ -495,6 +495,27 @@ class AppStrings {
     "You chose to drop this order off at the branch.": "اخترت تسليم هذا الطلب في الفرع بنفسك.",
     "Your order has been placed. Bring your items to the branch; we'll let you know once they're received.": "تم تقديم طلبك. أحضر قطعك إلى الفرع وسنُعلمك فور استلامها.",
     "Pickup method": "طريقة الاستلام",
+    // Driver live tracking
+    'Smart Wash — on duty': 'Smart Wash — أثناء العمل',
+    'Sharing your location with dispatch while you are signed in.': 'تتم مشاركة موقعك مع فريق التوزيع طوال تسجيل دخولك.',
+    'not yet': 'ليس بعد',
+    'sec ago': 'ث مضت',
+    'min ago': 'د مضت',
+    'Sharing your location': 'تتم مشاركة موقعك',
+    'Last sent': 'آخر إرسال',
+    'At': 'في',
+    'No connection — locations saved': 'لا يوجد اتصال — تم حفظ المواقع',
+    'waiting to send': 'بانتظار الإرسال',
+    'Starting location sharing…': 'جارٍ بدء مشاركة الموقع…',
+    'Location (GPS) is turned off': 'الموقع (GPS) متوقف',
+    "Dispatch can't see you on the map.": 'لا يستطيع فريق التوزيع رؤيتك على الخريطة.',
+    'Turn on': 'تشغيل',
+    'Location access needed': 'مطلوب الوصول إلى الموقع',
+    'Allow': 'سماح',
+    'Location access is blocked': 'الوصول إلى الموقع محظور',
+    'Allow location for Smart Wash in your phone settings.': 'اسمح لتطبيق Smart Wash بالوصول إلى الموقع من إعدادات هاتفك.',
+    'Settings': 'الإعدادات',
+    'Location sharing stopped': 'توقفت مشاركة الموقع',
   };
 
   static String get(String key, String lang) => lang == 'ar' ? (_ar[key] ?? key) : key;

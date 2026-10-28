@@ -16,6 +16,7 @@ import 'services/order_service.dart';
 import 'services/profile_service.dart';
 import 'services/tenant_service.dart';
 import 'core/realtime.dart';
+import 'features/driver/location_tracker.dart';
 import 'state/app_state.dart';
 import 'state/theme_controller.dart';
 
@@ -55,6 +56,7 @@ void main() {
         ChangeNotifierProvider<ThemeController>.value(value: theme),
         ChangeNotifierProvider<AppState>.value(value: appState),
         ChangeNotifierProvider<RealtimeClient>.value(value: appState.realtime),
+        ChangeNotifierProvider<LocationTracker>.value(value: appState.tracker),
       ],
       child: const SmartWashApp(),
     ),

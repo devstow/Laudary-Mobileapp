@@ -6,11 +6,13 @@ import 'package:flutter/material.dart' show ThemeMode;
 import '../core/api_client.dart';
 import '../core/token_store.dart';
 import '../core/realtime.dart';
+import '../features/driver/location_tracker.dart';
 import '../l10n/l10n.dart';
 import '../models/auth.dart';
 import '../models/tenant.dart';
 import '../services/auth_service.dart';
 import '../services/tenant_service.dart';
+import '../services/tracking_service.dart';
 import 'theme_controller.dart';
 
 enum AppStatus { bootstrapping, loggedOut, loggedIn }
@@ -37,6 +39,8 @@ class AppState extends ChangeNotifier {
   final TenantService _tenants;
   /// Live updates from the API hub (orders/tasks/notifications) — connected for the signed-in session.
   late final RealtimeClient realtime = RealtimeClient(store);
+  /// Driver location sharing — started automatically for a driver session (see LocationTracker).
+  late final LocationTracker tracker = LocationTracker(TrackingService(api), lang: () => locale.code);
 
   AppStatus status = AppStatus.bootstrapping;
   String? tenantName;
@@ -76,6 +80,7 @@ class AppState extends ChangeNotifier {
     currency = await store.tenantCurrency ?? 'SAR';
     _set(AppStatus.loggedIn);
     unawaited(realtime.connect());
+    _startDriverTracking();
     // Refresh the laundry's CURRENT branding + currency (best-effort, never blocks the UI).
     unawaited(_refreshBranding(user!.tenantId));
   }
@@ -120,9 +125,16 @@ class AppState extends ChangeNotifier {
     }
     _set(AppStatus.loggedIn);
     unawaited(realtime.connect());
+    _startDriverTracking();
+  }
+
+  void _startDriverTracking() {
+    if (user?.isDriver ?? false) unawaited(tracker.start());
   }
 
   Future<void> logout() async {
+    // While the session is still valid: tell dispatch this driver stopped sharing (shown offline at once).
+    await tracker.stop(notifyServer: true);
     final rt = await store.refreshToken;
     if (rt != null) await auth.logout(rt);
     await _signedOut();
@@ -142,6 +154,7 @@ class AppState extends ChangeNotifier {
 
   // The next sign-in may be a different business, so drop the cached branding too.
   Future<void> _signedOut() async {
+    await tracker.stop();
     await realtime.disconnect();
     await store.clearAll();
     user = null;

@@ -14,7 +14,6 @@ import '../../theme/app_theme.dart';
 import '../../widgets/driver_task_card.dart';
 import '../../widgets/ui.dart';
 import 'driver_task_detail_screen.dart';
-import 'geofence.dart';
 
 class DriverTasksScreen extends StatefulWidget {
   const DriverTasksScreen({super.key, this.initialGroup = TaskGroup.all, this.initialType, this.initialPriority});
@@ -31,7 +30,6 @@ class _DriverTasksScreenState extends State<DriverTasksScreen> {
 
   final _searchCtrl = TextEditingController();
   final _scroll = ScrollController();
-  late final GeofenceHeartbeat _geofence = GeofenceHeartbeat(context.read<DeliveryService>());
   Timer? _debounce;
   StreamSubscription<RealtimeEvent>? _rt;
 
@@ -63,7 +61,6 @@ class _DriverTasksScreenState extends State<DriverTasksScreen> {
   void dispose() {
     _debounce?.cancel();
     _rt?.cancel();
-    _geofence.dispose();
     _searchCtrl.dispose();
     _scroll.dispose();
     super.dispose();
@@ -98,7 +95,6 @@ class _DriverTasksScreenState extends State<DriverTasksScreen> {
         _loading = false;
         _loadingMore = false;
       });
-      _syncGeofence();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -107,17 +103,6 @@ class _DriverTasksScreenState extends State<DriverTasksScreen> {
         if (reset) _error = ApiException.from(e).message;
       });
     }
-  }
-
-  void _syncGeofence() {
-    _geofence.sync(
-      hasInTransit: _items.any((t) => t.status == DeliveryStatus.inTransit),
-      onArrived: (orders) {
-        if (!mounted) return;
-        showToast(context, '${context.t('Arrived at')} ${orders.join(', ')}');
-        _load(reset: true);
-      },
-    );
   }
 
   Future<void> _loadMore() async {
