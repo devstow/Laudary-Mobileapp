@@ -12,12 +12,12 @@ import '../../models/enums.dart';
 import '../../models/notification.dart';
 import '../../services/api_exception.dart';
 import '../../services/delivery_service.dart';
-import '../../services/notification_service.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/driver_task_card.dart';
 import '../../widgets/ui.dart';
 import '../assistant/assistant_screen.dart';
+import '../notifications/notification_center.dart';
 import '../notifications/notifications_screen.dart';
 import 'driver_task_detail_screen.dart';
 import 'location_tracker.dart';
@@ -34,6 +34,11 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
   late Future<DriverDashboard> _future;
   int _unread = 0;
   Timer? _poll;
+  NotificationCenter? _center;
+
+  void _onCenter() {
+    if (mounted && _center!.unread != _unread) setState(() => _unread = _center!.unread);
+  }
   StreamSubscription<RealtimeEvent>? _rt;
   StreamSubscription<List<String>>? _arrivals;
 
@@ -51,11 +56,14 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
       _refresh();
     });
     _poll = Timer.periodic(const Duration(seconds: 20), (_) => _loadUnread());
+    // Realtime: the center re-reads the server count on every notification event — follow it.
+    _center = context.read<NotificationCenter>()..addListener(_onCenter);
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _center?.removeListener(_onCenter);
     _rt?.cancel();
     _arrivals?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -89,7 +97,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
 
   Future<void> _loadUnread() async {
     try {
-      final n = await context.read<NotificationService>().unreadCount();
+      final n = await context.read<NotificationCenter>().refresh();
+      if (n == null) return;
       if (mounted && n != _unread) setState(() => _unread = n);
     } catch (_) {}
   }
@@ -99,14 +108,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
     _loadUnread();
   }
 
-  /// Driver notifications name the order number (no id) → open that task's detail.
-  Future<void> _openDriverNotification(AppNotification n) async {
-    final orderNo = n.orderNumberRef;
-    if (orderNo == null || !mounted) return;
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => DriverTaskDetailScreen(orderNumber: orderNo, title: orderNo),
-    ));
-  }
+  Future<void> _openDriverNotification(AppNotification n) => openDriverNotification(context, n);
 
   @override
   Widget build(BuildContext context) {
@@ -371,7 +373,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('${t.orderNumber ?? '—'} · ${context.t(t.type.label)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.ink)),
               const SizedBox(height: 2),
-              Text(t.customerName ?? (t.address ?? '—'), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.muted, fontSize: 12)),
+              Text(ltr(t.customerName ?? (t.address ?? '—')), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.muted, fontSize: 12)),
             ]),
           ),
           Icon(Icons.chevron_right_rounded, color: AppColors.faint),
@@ -444,4 +446,13 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> with Widg
       ),
     );
   }
+}
+
+/// Driver notifications name the order number (no id) → open that task's detail.
+Future<void> openDriverNotification(BuildContext context, AppNotification n) async {
+  final orderNo = n.orderNumberRef;
+  if (orderNo == null || !context.mounted) return;
+  await Navigator.of(context).push(MaterialPageRoute(
+    builder: (_) => DriverTaskDetailScreen(orderNumber: orderNo, title: orderNo),
+  ));
 }

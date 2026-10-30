@@ -24,6 +24,10 @@ class AppConfig {
   /// Name of the environment the build was made for (`dev`, `staging`, `production`).
   static const String environment = String.fromEnvironment('APP_ENV', defaultValue: 'dev');
 
+  /// App version + build (`1.0.2+2011`), injected by tool/build_release_apk.ps1 (`--dart-define=APP_VERSION=…`).
+  /// Sent with live-tracking status reports so dispatch can see which build a driver runs.
+  static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: 'dev');
+
   /// Base URL of SmartWash.Api for this build.
   static const String apiBaseUrl = _definedApiBaseUrl != '' ? _definedApiBaseUrl : devApiBaseUrl;
 

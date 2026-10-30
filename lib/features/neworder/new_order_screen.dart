@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -278,7 +278,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _phone,
-            keyboardType: TextInputType.phone,
+            keyboardType: TextInputType.phone, textDirection: TextDirection.ltr,
             maxLength: 50,
             decoration: InputDecoration(
               labelText: context.t('Contact phone'),

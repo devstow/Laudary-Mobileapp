@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../core/config.dart';
 import '../../l10n/l10n.dart';
 import '../../services/tracking_service.dart';
 
@@ -73,6 +74,14 @@ class LocationTracker extends ChangeNotifier with WidgetsBindingObserver {
   Duration _sendInterval = const Duration(seconds: 15);
   Duration _heartbeatEvery = const Duration(seconds: 60);
   bool _observing = false;
+  /// A start() is in flight (permission dialog / config request): blocks a second, parallel start — the permission
+  /// dialog pauses and resumes the app, which would otherwise start a duplicate position stream.
+  bool _starting = false;
+  Timer? _retry;
+  String? _reported;
+  int _sentCount = 0;
+
+  static void _log(String m) => debugPrint('[tracking] $m');
 
   String? get insideBranchName {
     final id = insideBranchId;
@@ -87,33 +96,52 @@ class LocationTracker extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Start (or retry) sharing. Safe to call repeatedly; asks for permission only when [askPermission].
   Future<void> start({bool askPermission = true}) async {
-    if (_running) return;
+    if (_running || _starting) return;
+    _starting = true;
+    _retry?.cancel();
     if (!_observing) {
       WidgetsBinding.instance.addObserver(this);
       _observing = true;
     }
     _set(TrackingState.starting);
+    _log('start (askPermission=$askPermission, app ${AppConfig.appVersion}, api ${AppConfig.apiBaseUrl})');
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        _set(TrackingState.serviceDisabled);
+        _log('device location (GPS) is off');
+        _set(TrackingState.serviceDisabled, detail: 'Location services are turned off on the device');
         return;
       }
       var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied && askPermission) perm = await Geolocator.requestPermission();
+      _log('permission: $perm');
+      if (perm == LocationPermission.denied && askPermission) {
+        perm = await Geolocator.requestPermission();
+        _log('permission after request: $perm');
+      }
       if (perm == LocationPermission.deniedForever) {
-        _set(TrackingState.permissionDeniedForever);
+        _set(TrackingState.permissionDeniedForever, detail: 'Location permission permanently denied');
         return;
       }
       if (perm == LocationPermission.denied || perm == LocationPermission.unableToDetermine) {
-        _set(TrackingState.permissionDenied);
+        _set(TrackingState.permissionDenied, detail: 'Location permission denied');
         return;
       }
 
-      final config = await _api.config();
+      final TrackingConfig? config;
+      try {
+        config = await _api.config();
+      } catch (e) {
+        // No network at sign-in: try again shortly instead of giving up until the app is reopened.
+        _log('config request failed ($e) — retrying in 30 s');
+        _set(TrackingState.offline, detail: 'Could not reach the server to start tracking');
+        _retry = Timer(const Duration(seconds: 30), () => unawaited(start(askPermission: false)));
+        return;
+      }
       if (config == null) {
+        _log('server says this account is not an active driver — tracking off');
         _set(TrackingState.notADriver);
         return;
       }
+      _log('config: ${config.geofences.length} geofence(s), send ${config.sendDistanceMeters} m / ${config.sendIntervalSeconds} s, keep-alive ${config.heartbeatSeconds} s');
       geofences = config.geofences;
       _sendDistance = config.sendDistanceMeters;
       _sendInterval = Duration(seconds: config.sendIntervalSeconds);
@@ -124,23 +152,33 @@ class LocationTracker extends ChangeNotifier with WidgetsBindingObserver {
         _onPosition,
         onError: (Object e) {
           // Location turned off / permission revoked while running.
+          _log('position stream error: $e');
           _stopStream();
-          _set(e is LocationServiceDisabledException ? TrackingState.serviceDisabled : TrackingState.permissionDenied);
+          if (e is LocationServiceDisabledException) {
+            _set(TrackingState.serviceDisabled, detail: 'Location services were turned off');
+          } else {
+            _set(TrackingState.permissionDenied, detail: 'Location stream stopped: $e');
+          }
         },
       );
       _heartbeat = Timer.periodic(const Duration(seconds: 20), (_) => _keepAlive());
       _set(TrackingState.active);
+      _log('position stream started');
       // First position immediately (the stream may wait for movement).
       unawaited(_freshFix());
-    } catch (_) {
+    } catch (e) {
+      _log('start failed: $e');
       _stopStream();
-      _set(TrackingState.error);
+      _set(TrackingState.error, detail: 'Tracking failed to start: $e');
+    } finally {
+      _starting = false;
     }
   }
 
   /// Stop sharing. [notifyServer] (sign-out with a valid session): the map shows the driver offline at once.
   Future<void> stop({bool notifyServer = false}) async {
-    final wasRunning = _running;
+    _log('stop (notifyServer=$notifyServer, $_sentCount fixes sent this session)');
+    _retry?.cancel();
     _stopStream();
     if (_observing) {
       WidgetsBinding.instance.removeObserver(this);
@@ -152,14 +190,17 @@ class LocationTracker extends ChangeNotifier with WidgetsBindingObserver {
     lastFixAt = null;
     insideBranchId = null;
     _lastSent = null;
+    _reported = null;
+    _sentCount = 0;
     _set(TrackingState.off);
-    if (notifyServer && wasRunning) await _api.stop();
+    // Always on sign-out (even if sharing never started, e.g. permission denied): the map shows "Signed out".
+    if (notifyServer) await _api.stop();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Back from settings / the permission dialog: try again without nagging.
-    if (state == AppLifecycleState.resumed && !_running && this.state != TrackingState.off && this.state != TrackingState.notADriver) {
+    if (state == AppLifecycleState.resumed && !_running && !_starting && this.state != TrackingState.off && this.state != TrackingState.notADriver) {
       unawaited(start(askPermission: false));
     }
   }
@@ -222,7 +263,9 @@ class LocationTracker extends ChangeNotifier with WidgetsBindingObserver {
       if (!_running) return;
       lastFixAt = DateTime.now();
       _enqueue(_toFix(p));
-    } catch (_) {/* no fix right now: the map will honestly show the driver going stale */}
+    } catch (e) {
+      _log('no fresh fix: $e'); // the map will honestly show the driver going stale
+    }
   }
 
   LocationFix _toFix(Position p) => LocationFix(
@@ -254,6 +297,7 @@ class LocationTracker extends ChangeNotifier with WidgetsBindingObserver {
         _queue.removeRange(0, batch.length);
         buffered = _queue.length;
         if (r.notADriver) {
+          _log('server rejected fixes: not an active driver — tracking off');
           _stopStream();
           _set(TrackingState.notADriver);
           return;
@@ -261,13 +305,20 @@ class LocationTracker extends ChangeNotifier with WidgetsBindingObserver {
         if (r.ok) {
           lastSentAt = DateTime.now();
           insideBranchId = r.insideBranchId;
+          _sentCount += batch.length;
+          if (_sentCount == batch.length || _sentCount % 20 == 0) {
+            _log('sent ${batch.length} fix(es) (total $_sentCount), last ${batch.last.lat.toStringAsFixed(5)},${batch.last.lng.toStringAsFixed(5)}');
+          }
           if (r.arrived.isNotEmpty) _arrivals.add(r.arrived);
+        } else {
+          _log('server rejected a batch of ${batch.length} (invalid fixes) — dropped');
         }
         _set(TrackingState.active);
       }
-    } catch (_) {
+    } catch (e) {
       // Network down: keep the buffer; the keep-alive timer retries.
-      if (_running) _set(TrackingState.offline);
+      _log('send failed ($e) — ${_queue.length} fix(es) kept for retry');
+      if (_running) _set(TrackingState.offline, detail: 'No connection to the server');
     } finally {
       _sending = false;
     }
@@ -281,9 +332,32 @@ class LocationTracker extends ChangeNotifier with WidgetsBindingObserver {
     _heartbeat = null;
   }
 
-  void _set(TrackingState s) {
+  void _set(TrackingState s, {String? detail}) {
     state = s;
     notifyListeners();
+    _report(s, detail);
+  }
+
+  /// Tell the server about sharing-state CHANGES (so dispatch sees "permission denied", "GPS off"… instead of a
+  /// bare Offline). Off/notADriver aren't reported (sign-out goes through stop()). Best-effort; an Offline report
+  /// can't get through until the network returns, after which the next state change is reported.
+  void _report(TrackingState s, String? detail) {
+    final name = switch (s) {
+      TrackingState.active => 'Active',
+      TrackingState.starting => 'Starting',
+      TrackingState.offline => 'Offline',
+      TrackingState.serviceDisabled => 'ServiceDisabled',
+      TrackingState.permissionDenied => 'PermissionDenied',
+      TrackingState.permissionDeniedForever => 'PermissionDeniedForever',
+      TrackingState.error => 'Error',
+      TrackingState.off || TrackingState.notADriver => null,
+    };
+    if (name == null || name == _reported) return;
+    _reported = name;
+    final client = '${defaultTargetPlatform.name} ${AppConfig.appVersion}';
+    unawaited(_api.reportStatus(name, detail: detail, client: client).then((ok) {
+      if (!ok && _reported == name) _reported = null; // retry with the next change
+    }));
   }
 
   static double _distance(LocationFix a, LocationFix b) {

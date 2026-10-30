@@ -105,6 +105,21 @@ class TrackingService {
     );
   }
 
+  /// POST api/tracking/status — the app's sharing state (Active, PermissionDenied, ServiceDisabled, Offline, Error…),
+  /// so dispatch sees WHY a signed-in driver has no position. Returns false when it could not be delivered.
+  Future<bool> reportStatus(String state, {String? detail, String? client}) async {
+    try {
+      final res = await _api.dio.post('/api/tracking/status', data: {
+        'state': state,
+        'detail': ?detail,
+        'client': ?client,
+      });
+      return isOk(res);
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Best-effort: tells the server the driver stopped sharing (sign-out), so the map shows them offline at once.
   Future<void> stop() async {
     try {

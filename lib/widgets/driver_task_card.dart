@@ -140,7 +140,7 @@ class DriverTaskCard extends StatelessWidget {
         if (task.headingToBranch || task.status == DeliveryStatus.droppedOff)
           _line(Icons.storefront_rounded, '${context.t('Drop off at branch')}: ${task.branchName ?? '—'}')
         else
-          _line(Icons.location_on_rounded, '${context.t(task.isPickup ? 'Collect from' : 'Deliver to')}: ${task.address ?? context.t('No address on file')}'),
+          _line(Icons.location_on_rounded, '${context.t(task.isPickup ? 'Collect from' : 'Deliver to')}: ${task.address == null ? context.t('No address on file') : ltr(task.address!)}'),
         if (task.scheduledAt != null) _line(Icons.event_rounded, '${context.t('Scheduled')}: ${df.format(task.scheduledAt!)}'),
         if (task.collectedAt != null) _line(Icons.inventory_2_rounded, '${context.t('Collected')}: ${df.format(task.collectedAt!)}'),
         if (task.droppedOffAt != null) _line(Icons.storefront_rounded, '${context.t('Handed over at branch')}: ${df.format(task.droppedOffAt!)}'),

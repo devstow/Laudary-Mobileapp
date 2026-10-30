@@ -99,7 +99,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _email,
-              keyboardType: TextInputType.emailAddress,
+              keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(labelText: context.t('Email'), prefixIcon: const Icon(Icons.mail_outline_rounded)),
               validator: (v) => (v == null || !v.contains('@')) ? context.t('Email') : null,
@@ -107,7 +107,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _phone,
-              keyboardType: TextInputType.phone,
+              keyboardType: TextInputType.phone, textDirection: TextDirection.ltr,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(labelText: context.t('Phone'), prefixIcon: const Icon(Icons.phone_outlined)),
             ),

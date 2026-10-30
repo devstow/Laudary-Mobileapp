@@ -14,6 +14,7 @@ import '../../services/delivery_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/driver_task_card.dart';
 import '../../widgets/ui.dart';
+import '../update/resume_point.dart';
 import 'driver_actions.dart';
 
 /// Single delivery-task detail — the full task card (journey + status-gated actions + navigate/call)
@@ -40,9 +41,14 @@ class _DriverTaskDetailScreenState extends State<DriverTaskDetailScreen> {
 
   String get _orderNo => widget.task?.orderNumber ?? widget.orderNumber ?? '';
 
+  // Remembered (id only) so an in-app update can reopen this task afterwards.
+  String? _tracked;
+
   @override
   void initState() {
     super.initState();
+    _tracked = widget.task?.id;
+    if (_tracked != null) ScreenTracker.open('driverTask', _tracked!, label: _orderNo);
     _rt = context.read<RealtimeClient>().events.listen((e) {
       final oid = _detail?.task.orderId ?? widget.task?.orderId;
       if (e.touchesOrders && mounted && oid != null && (e.orderId ?? '').toLowerCase() == oid.toLowerCase()) _reload();
@@ -52,6 +58,7 @@ class _DriverTaskDetailScreenState extends State<DriverTaskDetailScreen> {
   @override
   void dispose() {
     _rt?.cancel();
+    if (_tracked != null) ScreenTracker.close('driverTask', _tracked!);
     super.dispose();
   }
 
@@ -76,6 +83,10 @@ class _DriverTaskDetailScreenState extends State<DriverTaskDetailScreen> {
       }
     }
     found ??= widget.task; // fall back to the task we already have, if any
+    if (found != null && _tracked == null && mounted) {
+      _tracked = found.id;
+      ScreenTracker.open('driverTask', found.id, label: found.orderNumber);
+    }
     if (found != null) {
       // The full record (order, items, instructions, amount to collect, legs, history) — best effort.
       try {

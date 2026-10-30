@@ -34,6 +34,8 @@ class RealtimeEvent {
   bool get isOrder => kind.startsWith('order.');
   bool get isTask => kind.startsWith('task.');
   bool get isNotification => kind == 'notification';
+  /// Notifications were read / cleared (here or on another device): re-read the unread count.
+  bool get isNotificationsChanged => kind == 'notifications.changed';
   /// Anything that changes what an order/task screen shows.
   bool get touchesOrders => isOrder || isTask;
 
@@ -72,7 +74,10 @@ class RealtimeNotification {
 /// [events] and reload what they show; the 20-second polls stay as a fallback for when the socket
 /// is down. Membership (tenant / branch / own user) is decided by the server from the token.
 class RealtimeClient extends ChangeNotifier {
-  RealtimeClient(this._store);
+  RealtimeClient(this._store, {this.tokenProvider});
+
+  /// Supplies a valid access token (refreshing it when expired). Defaults to the stored token.
+  final Future<String?> Function()? tokenProvider;
 
   final TokenStore _store;
   HubConnection? _conn;
@@ -92,7 +97,8 @@ class RealtimeClient extends ChangeNotifier {
         .withUrl(
           '${AppConfig.apiBaseUrl}/hubs/realtime',
           options: HttpConnectionOptions(
-            accessTokenFactory: () async => (await _store.accessToken) ?? '',
+            // Refreshed when expired: a hub reconnect after 15 min must not fail on a stale token forever.
+            accessTokenFactory: () async => (await (tokenProvider?.call() ?? _store.accessToken)) ?? '',
             transport: HttpTransportType.WebSockets,
           ),
         )

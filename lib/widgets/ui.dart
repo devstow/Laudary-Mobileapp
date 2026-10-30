@@ -260,7 +260,7 @@ class InfoRow extends StatelessWidget {
         Expanded(child: Text(label, style: TextStyle(color: AppColors.muted, fontSize: 13.5, fontWeight: FontWeight.w500))),
         const SizedBox(width: 12),
         Flexible(
-          child: Text(value,
+          child: Text(ltr(value),
               textAlign: TextAlign.end,
               style: TextStyle(color: valueColor ?? AppColors.ink, fontWeight: FontWeight.w700, fontSize: 13.5)),
         ),

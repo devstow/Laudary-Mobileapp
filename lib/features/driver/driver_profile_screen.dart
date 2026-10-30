@@ -146,7 +146,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                       validator: (v) => (v ?? '').trim().isEmpty ? context.t('Full name is required.') : null,
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(controller: _phone, keyboardType: TextInputType.phone, maxLength: 50, decoration: InputDecoration(labelText: context.t('Phone'), counterText: '', prefixIcon: const Icon(Icons.phone_outlined))),
+                    TextFormField(controller: _phone, keyboardType: TextInputType.phone, textDirection: TextDirection.ltr, maxLength: 50, decoration: InputDecoration(labelText: context.t('Phone'), counterText: '', prefixIcon: const Icon(Icons.phone_outlined))),
                     const SizedBox(height: 12),
                     TextFormField(controller: _plate, maxLength: 30, decoration: InputDecoration(labelText: context.t('Vehicle plate'), hintText: context.t('e.g. ABC 1234'), counterText: '', prefixIcon: const Icon(Icons.directions_car_outlined))),
                     const SizedBox(height: 12),

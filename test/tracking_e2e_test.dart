@@ -57,7 +57,7 @@ void main() {
       final metresSouth = 2000 - i * 500; // 2000, 1500, 1000, 500, 0
       return LocationFix(
         lat: lahore.lat - metresSouth / 111320, lng: lahore.lng,
-        recordedAt: now.subtract(Duration(seconds: (4 - i) * 10)),
+        recordedAt: now.subtract(Duration(seconds: (4 - i) * 40)), // 500 m per 40 s: a plausible drive (the server rejects teleports)
         accuracy: 8, speed: 9, heading: 0, isMocked: true,
       );
     });
@@ -72,7 +72,12 @@ void main() {
     expect(bad.ok, isFalse);
     expect(bad.notADriver, isFalse);
 
-    // 4. Sign-out path.
+    // 4. Device status report (what the app sends when permission/GPS/network changes).
+    expect(await tracking.reportStatus('Active', client: 'test e2e'), isTrue);
+    // ignore: avoid_print
+    print('✓ status report accepted');
+
+    // 5. Sign-out path.
     await tracking.stop();
     // ignore: avoid_print
     print('✓ stop sent');

@@ -46,6 +46,73 @@ class MainActivity : FlutterActivity() {
                 result.error("downloads", e.message ?: e.javaClass.simpleName, null)
             }
         }
+
+        // Unread badge, system notifications, background sync (see AppNotifications.kt). A tapped notification
+        // opens the app with EXTRA_OPEN; Dart asks for it once at start (launchTarget) and gets "open" later.
+        val notifyChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "smartwash/notify")
+        this.notifyChannel = notifyChannel
+        notifyChannel.setMethodCallHandler { call, result ->
+            try {
+                if (call.method == "launchTarget") {
+                    result.success(pendingOpen)
+                    pendingOpen = null
+                } else {
+                    @Suppress("UNCHECKED_CAST")
+                    AppNotifications.handle(this, call.method, (call.arguments as? Map<String, Any?>) ?: emptyMap(), result)
+                }
+            } catch (e: Exception) {
+                result.error("notify", e.message ?: e.javaClass.simpleName, null)
+            }
+        }
+
+        // In-app updates (see AppUpdater.kt).
+        val updaterChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "smartwash/updater")
+        val updater = AppUpdater(this, updaterChannel)
+        AppUpdater.current = updater
+        updaterChannel.setMethodCallHandler { call, result ->
+            try {
+                @Suppress("UNCHECKED_CAST")
+                updater.handle(call.method, (call.arguments as? Map<String, Any?>) ?: emptyMap(), result)
+            } catch (e: Exception) {
+                result.error("updater", e.message ?: e.javaClass.simpleName, null)
+            }
+        }
+    }
+
+    private var notifyChannel: MethodChannel? = null
+    private var pendingOpen: String? = null
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        pendingOpen = intent?.getStringExtra(AppNotifications.EXTRA_OPEN)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val target = intent.getStringExtra(AppNotifications.EXTRA_OPEN) ?: return
+        val ch = notifyChannel
+        if (ch != null) ch.invokeMethod("open", target) else pendingOpen = target
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AppUpdater.current?.resumed = true
+    }
+
+    override fun onPause() {
+        AppUpdater.current?.resumed = false
+        super.onPause()
+    }
+
+    @Deprecated("Activity result of the system package installer (AppUpdater)")
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (AppUpdater.current?.onActivityResult(requestCode, resultCode) != true) super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) AppUpdater.current = null
+        super.onDestroy()
     }
 
     private fun saveToDownloads(name: String, mime: String, bytes: ByteArray): Map<String, String> {

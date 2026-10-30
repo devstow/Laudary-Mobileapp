@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -15,6 +16,14 @@ val hasReleaseSigning = keystorePropertiesFile.exists()
 if (hasReleaseSigning) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
+
+// The --dart-define values Flutter passes to Gradle (base64, comma separated). API_BASE_URL is exposed to the native
+// side as R.string.sw_api_base_url so a crash during process start can still be reported (SmartWashApplication).
+val dartDefines: Map<String, String> = (project.findProperty("dart-defines") as String?).orEmpty()
+    .split(",").filter { it.isNotBlank() }
+    .mapNotNull { runCatching { String(Base64.getDecoder().decode(it)) }.getOrNull() }
+    .mapNotNull { d -> d.indexOf('=').takeIf { it > 0 }?.let { d.substring(0, it) to d.substring(it + 1) } }
+    .toMap()
 
 android {
     namespace = "com.example.mobileapp"
@@ -47,6 +56,11 @@ android {
         // Version + build number come from pubspec.yaml ("version: x.y.z+n") — the single source.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        resValue("string", "sw_api_base_url", dartDefines["API_BASE_URL"] ?: "")
+    }
+
+    buildFeatures {
+        resValues = true
     }
 
     signingConfigs {
@@ -95,4 +109,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Background unread-badge sync while the app is closed (AppNotifications.kt / BadgeSyncWorker).
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
 }

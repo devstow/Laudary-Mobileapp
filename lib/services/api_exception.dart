@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../l10n/l10n.dart';
+
 /// A friendly error extracted from a ProblemDetails / validation response.
 class ApiException implements Exception {
   ApiException(this.message, {this.statusCode, this.title});
@@ -17,7 +19,7 @@ class ApiException implements Exception {
     if (error is DioException) {
       final res = error.response;
       if (res != null) return _fromResponse(res);
-      return ApiException('Network error. Please check your connection.');
+      return ApiException(AppStrings.tr('Network error. Please check your connection.'));
     }
     if (error is Response) return _fromResponse(error);
     return ApiException(error.toString());
@@ -25,7 +27,8 @@ class ApiException implements Exception {
 
   static ApiException _fromResponse(Response res) {
     final data = res.data;
-    String msg = 'Something went wrong.';
+    // Server messages arrive already translated (the API localizes them from Accept-Language).
+    String msg = AppStrings.tr('Something went wrong.');
     String? title;
     if (data is Map) {
       if (data['title'] is String) title = data['title'] as String;

@@ -3,4 +3,6 @@
      Android 10+ uses MediaStore content URIs instead. See MainActivity.kt / lib/core/downloads.dart. -->
 <paths>
     <external-files-path name="downloads" path="." />
+    <!-- Verified update APK handed to the system package installer (AppUpdater.installIntent). -->
+    <cache-path name="updates" path="updates/" />
 </paths>

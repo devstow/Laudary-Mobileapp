@@ -42,9 +42,8 @@ cd D:\Source\MobileApp\android
 copy key.properties.example key.properties   # then fill in the passwords
 ```
 
-Application id: `com.example.mobileapp` (unchanged, as it was). It must stay the same for updates to
-install over existing installations. Note that Google Play rejects `com.example.*`, so decide on the final
-id **before** the first store release — changing it later means every sideloaded user reinstalls.
+Application id: see *Build a release APK* below (`com.cyberstackmedia.smartwash`). It must stay the same for
+updates to install over existing installations.
 
 ## Build a release APK
 
@@ -105,6 +104,80 @@ build number — the run fails if users would get anything other than the file t
 app notices the new file on the next request — no restart. Download URL:
 **https://smartwash-staging.20-203-96-110.nip.io/download/android** (facts: `…/download/android/info`)
 
+## PERMANENT RULE — a staging deploy with app changes always ships the new APK to the landing page
+
+User rule (2026-10-30). Whenever a staging deploy includes changes that affect the mobile app (app code, or
+API/web changes the app depends on), the same deploy builds the next APK (version + build number from the agreed
+sequence, e.g. 1.0.4 (2013) → 1.0.5 (2014) …) and publishes it, so the staging landing page / QR code / in-app update
+always serve the LATEST app. A staging deploy is not "done" while the landing page still shows an older app build
+than the code that was deployed. The start gate below still applies: the new build becomes the landing-page version
+as soon as it has started on the tester's phone; if it can't start, the deploy is reported as incomplete and fixed —
+never published around the gate.
+
+## PERMANENT RULE — no build goes public until it has STARTED on a real phone (start gate)
+
+2026-10-29: builds 1.0.4 (2013) and 1.0.5 (2014) passed every file check, went public, were installed on a phone —
+and never started (not one request from them reached the server). File checks prove a build INSTALLS, not that it
+RUNS. Therefore:
+
+1. `tool/publish_apk.ps1` uploads the build to the hidden candidate slot and then WAITS (up to `-StartGateMinutes`,
+   default 60) until THAT build reports `started` from a device — `GET api/public/app-release/android/canary?build=N`.
+   The app sends `started` after its first screen is drawn (`lib/main.dart`). No switch skips the gate.
+2. Any crash report from that build (native: `SmartWashApplication` crash handler, installed before any library
+   initialises; Dart: `FlutterError.onError` / `PlatformDispatcher.onError`) fails the gate, prints the stack trace and
+   NOTHING goes public. Crash reports are also logged by the API as `App CRASH report: …`.
+3. The tester installs the candidate over the current app: open `…/download/android/candidate` (QR:
+   `…/download/android/candidate/qr`), install, OPEN the app, wait for the first screen.
+4. Only then is the candidate promoted to the landing page / QR / in-app update.
+5. Native rule: nothing optional may run at process start (no auto-initialising libraries — WorkManager is
+   initialised on demand via `SmartWashApplication`); every optional native feature is wrapped so its failure can't
+   stop the app.
+6. When this PC can run the emulator (enable Intel VT-x in the BIOS) the gate can be met by the emulator too.
+
+## PERMANENT RULE — every release installs over the previous one (no uninstall)
+
+Android installs a new APK over the installed app — keeping its data, settings and sign-in — only when ALL hold:
+same **application id** (`com.cyberstackmedia.smartwash`), a signer the installed app trusts (the **release key**,
+pin `tool/release-cert.sha256`) and a **higher versionCode**. For every release:
+
+1. Bump `version: x.y.z+N` in `pubspec.yaml` (N above every published code; scripts refuse otherwise).
+2. Write what changed in `tool/release-notes.json` (`en` + `ar`) — shown in the in-app update prompt.
+3. `.\tool\build_release_apk.ps1 -Env staging` (`-Mandatory` or `-MinSupportedBuild N` when older builds must
+   stop working; default = optional update).
+4. `.\tool\publish_apk.ps1 -Env staging -SshKey …` — the gate checks the file downloaded from staging, then
+   **`Test-UpdatesOver`** proves on the real files that it updates the live build in place (package, signer,
+   versionCode) and, after promotion, that `api/public/app-release/android?build=<previous>` offers exactly this
+   file (version, SHA-256, certificate, download). Any failure = nothing goes public.
+5. Test on a phone/emulator when one exists (the gate installs `-r` over the live build automatically).
+6. Never change the application id, never create a new key, never publish by hand. If a build cannot install over
+   the previous one, fix that before calling it ready.
+
+## In-app updates (from 1.0.3 / build 2012)
+
+* Source of truth = the published `smartwash.json` (+ APK) in the downloads folder — the same files the landing page
+  serves. The API reads it: `GET api/public/app-release/android?build=<installed>` → version, versionCode,
+  `downloadUrl` (`api/public/app-release/android/file`, HTTPS), size, SHA-256, signing cert, notes (en/ar),
+  `minSupportedVersionCode`, `updateAvailable`, `mandatory`. The server can force a minimum without rebuilding:
+  configuration `MobileApp__Android__MinSupportedBuild` (raises, never above the published build).
+* **Start-up**: the splash waits (≤ ~8 s) for the check before login / home. Optional → full-screen *Update Now* /
+  *Later* (Later = until the next launch). Mandatory → no Later. Server unreachable → the app continues, unless an
+  earlier check already said this build must update (remembered, so offline launches cannot skip it).
+* **While open**: re-checked every 30 min and when the app returns to the foreground after 15 min; a new build is
+  announced once with a dialog (Update Now / Later; mandatory has no Later).
+* **Update Now** (`lib/features/update/`, native `AppUpdater.kt`): "Install unknown apps" permission (explained, opens
+  the settings screen, continues automatically when the user returns) → free-space check → download with progress
+  (cancellable) → verify SHA-256 + package + versionCode + minSdk + **same signing certificate as the installed app**
+  → Android `PackageInstaller` session → Android's own confirmation. Cancel / failure → clear message + retry; the
+  installed app is never touched until Android installs the new one. Nothing is installed silently (Android does
+  not allow that for sideloaded apps).
+* **After the update**: Android stops the old process and does not reopen the app; a "Smart Wash updated — tap to
+  open" notification is posted (`PackageReplacedReceiver`). On the next start the app confirms the new build is
+  running ("updated to version …"), then reopens the screen the user was on (bottom tab + driver task / order,
+  stored as ids only) after re-checking it with the server — a reassigned task falls back to the task list. Data is
+  reloaded fresh; no action is ever replayed. Sign-in survives the update (same app, secure storage kept).
+* Builds before 2012 have no updater: those phones install 2012 once from the landing page (over the existing app,
+  no uninstall); every later release arrives in the app.
+
 ## Versioning
 
 `pubspec.yaml` → `version: 1.0.0+1` is the single source: `1.0.0` = `versionName`, `1` = `versionCode`
@@ -135,3 +208,20 @@ stay logged in.
 | `build_release_apk.ps1`: "signed with the WRONG certificate" | `key.properties` points at a different keystore than the pinned one in `tool/release-cert.sha256`. Restore the original keystore; do not change the pin unless the key is being replaced on purpose. |
 | `build_release_apk.ps1` / `publish_apk.ps1`: "already serves build N" | Bump `version: x.y.z+N` in `pubspec.yaml` — phones refuse to install a build number that is not higher than the installed one. |
 | `publish_apk.ps1`: "PUBLIC DOWNLOAD DIFFERS" | Something between the server folder and the browser (proxy, cache, partial swap) altered the file. Nothing was handed to users that matches the build — fix the server path, re-run. |
+
+## Sessions, notifications and Arabic (from 1.0.4 / build 2013)
+
+* **Stay signed in:** tokens live in secure storage (Keystore) until sign-out. Refresh is single-flight
+  (`ApiClient.refreshSession`): parallel 401s share ONE refresh — the server rejects a reused refresh token, which
+  used to sign users out. A network error during refresh never signs out; only a rejected refresh token does.
+  SignalR gets a refreshed token (`freshAccessToken`). The server session slides 7 days per refresh
+  (`Jwt__RefreshTokenDays`).
+* **Unread count / badge:** `lib/features/notifications/notification_center.dart` + native `AppNotifications.kt`
+  (see the web repo's REALTIME.md). Badge = one silent summary notification whose number is the server count
+  (dot on Pixel/stock launchers, number on Samsung and others, nothing on launchers without badges) + legacy
+  BADGE_COUNT_UPDATE broadcast. App closed: WorkManager every ~15 min with a device token. POST_NOTIFICATIONS is
+  requested after sign-in (Android 13+); if denied the in-app count still works.
+* **Arabic:** every UI string goes through `context.t()` / `AppStrings` (l10n.dart); RTL comes from the locale.
+  Phone / e-mail / code fields are LTR; `ltr(value)` isolates Latin values inside Arabic text. Server messages and
+  notifications arrive translated (Accept-Language). Audit: run the l10n key check before a release — every
+  `t('…')` literal must have an `_ar` entry.

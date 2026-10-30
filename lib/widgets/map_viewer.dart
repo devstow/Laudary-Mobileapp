@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 import 'map_layers.dart';
 
@@ -83,7 +84,7 @@ class _MapViewerState extends State<MapViewer> {
               right: 8,
               child: MapRoundBtn(
                 icon: Icons.fullscreen_rounded,
-                tooltip: 'Fullscreen',
+                tooltip: context.t('Fullscreen'),
                 onTap: () => FullScreenMap.open(context, markers: markers, center: center, zoom: points.length == 1 ? 15 : 13),
               ),
             ),

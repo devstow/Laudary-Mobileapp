@@ -11,9 +11,13 @@ import '../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 import '../orders/order_details_screen.dart';
+import 'notification_center.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key, this.onOpen});
+  const NotificationsScreen({super.key, this.onOpen, this.autoOpenId});
+
+  /// Opened from a tapped system notification: open (and mark read) this one once the list has loaded.
+  final String? autoOpenId;
 
   /// Optional custom "open" handler (e.g. the driver routes to a task instead of customer
   /// order-tracking). Called after the notification is marked read. When null, the default
@@ -34,8 +38,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     _reload();
-    _rt = context.read<RealtimeClient>().events.listen((e) { if (e.isNotification && mounted) setState(_reload); });
+    _rt = context.read<RealtimeClient>().events.listen((e) {
+      if ((e.isNotification || e.isNotificationsChanged) && mounted) setState(_reload);
+    });
+    final id = widget.autoOpenId;
+    if (id != null) {
+      _future.then((list) {
+        final hit = list.where((n) => n.id == id).firstOrNull;
+        if (hit != null && mounted) _open(hit);
+      }, onError: (_) {});
+    }
   }
+
+  // The badge / bells follow the server's count right away (the realtime event also triggers it).
+  void _syncCount() => context.read<NotificationCenter>().refresh();
 
   @override
   void dispose() {
@@ -47,12 +63,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _markAll() async {
     await context.read<NotificationService>().markAllRead();
-    if (mounted) setState(_reload);
+    if (!mounted) return;
+    _syncCount();
+    setState(_reload);
   }
 
   Future<void> _clearAll() async {
     await context.read<NotificationService>().clearAll();
-    if (mounted) setState(_reload);
+    if (!mounted) return;
+    _syncCount();
+    setState(_reload);
   }
 
   /// Mark the notification read, then — if it points to an order — open that order's
@@ -60,7 +80,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _open(AppNotification item) async {
     if (!item.isRead) {
       await context.read<NotificationService>().markRead(item.id);
-      if (mounted) setState(_reload);
+      if (mounted) {
+        _syncCount();
+        setState(_reload);
+      }
     }
     if (!mounted) return;
     // Role-specific routing (driver → task) when provided.

@@ -196,7 +196,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         return [
           TextField(
             controller: _email,
-            keyboardType: TextInputType.emailAddress,
+            keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr,
             enabled: !_busy,
             decoration: InputDecoration(
               labelText: context.t('Email'),
@@ -211,7 +211,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _code,
-            keyboardType: TextInputType.number,
+            keyboardType: TextInputType.number, textDirection: TextDirection.ltr,
             textAlign: TextAlign.center,
             maxLength: 6,
             enabled: !_busy,

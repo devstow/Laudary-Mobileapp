@@ -7,6 +7,14 @@ import '../payments/payments_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../widgets/floating_nav_bar.dart';
 import 'dashboard_screen.dart';
+import 'dart:async';
+
+import 'package:provider/provider.dart';
+
+import '../notifications/notification_center.dart';
+import '../notifications/notifications_screen.dart';
+import '../update/restore_after_update.dart';
+import '../update/resume_point.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -17,6 +25,40 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   int _rev = 0; // bump to force tabs to re-fetch after a new booking
+
+  @override
+  void initState() {
+    super.initState();
+    ScreenTracker.tab = 0;
+    // First launch after an in-app update: reopen the screen the customer was on (re-validated, loaded fresh).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) restoreAfterUpdate(context, driver: false, setTab: _selectTab);
+    });
+    // Tapped system notification (app was closed → launchTarget; app running → opens stream).
+    final center = context.read<NotificationCenter>();
+    _opens = center.opens.listen(_openFromNotification);
+    center.launchTarget().then((t) { if (t != null) _openFromNotification(t); });
+  }
+
+  StreamSubscription<String>? _opens;
+
+  @override
+  void dispose() {
+    _opens?.cancel();
+    super.dispose();
+  }
+
+  void _openFromNotification(String target) {
+    if (!mounted) return;
+    final id = target.startsWith('notification:') ? target.substring('notification:'.length) : null;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => NotificationsScreen(autoOpenId: id)));
+  }
+
+  void _selectTab(int i) {
+    if (!mounted) return;
+    setState(() => _index = i);
+    ScreenTracker.tab = i;
+  }
 
   Future<void> _newPickup() async {
     final booked = await Navigator.of(context).push<bool>(
@@ -44,7 +86,7 @@ class _HomeShellState extends State<HomeShell> {
       body: IndexedStack(index: _index, children: tabs),
       bottomNavigationBar: FloatingNavBar(
         index: _index,
-        onSelect: (i) => setState(() => _index = i),
+        onSelect: _selectTab,
         items: [
           NavItem(Icons.home_outlined, Icons.home_rounded, context.t('Home')),
           NavItem(Icons.receipt_long_outlined, Icons.receipt_long_rounded, context.t('Orders')),

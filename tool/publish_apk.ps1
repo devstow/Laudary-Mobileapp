@@ -44,7 +44,22 @@ param(
     [string] $Target = 'azureuser@20.203.96.110',
     [string] $RemoteDir = '/opt/Staging/SmartWash/data/downloads/android',
     [string] $ServiceUser = 'smartwash',
-    [string] $PublicUrl = 'https://smartwash-staging.20-203-96-110.nip.io/download/android'
+    [string] $PublicUrl = 'https://smartwash-staging.20-203-96-110.nip.io/download/android',
+    # START GATE (permanent rule, 2026-10-29): how long to wait for the candidate to report that it STARTED on a phone.
+    [int] $StartGateMinutes = 60,
+    # ROLLBACK (user decision, 2026-10-29: "revert to 1.0.3 (2012)"): re-publish an OLDER build that already ran fine.
+    # Only the file whose SHA-256 is given here is accepted; every file / signature / ABI check still runs. Phones
+    # with a NEWER build installed must uninstall first (Android never downgrades) — printed, not hidden.
+    # Start gate for a rollback build (which predates the "started" report): a running copy of THIS build must do
+    # its start-up update check against the API while the gate waits (logged as "App update: build N → … offered").
+    [string] $RollbackSha = '',
+    # Rollback only: count a start-up check of that build seen in the server log since this UTC time (default: now).
+    # The evidence must still be a real running copy of the build — only the time window is widened.
+    [string] $RunEvidenceSinceUtc = '',
+    # ONLY when the user has explicitly instructed in writing to publish without a device start report (e.g. 2026-10-30:
+    # "test the mobile app in Google Chrome first; if it works, deploy it"). Give the user's words + date. Never use it
+    # on your own initiative. Crash reports for the build still block the release; the approval is printed in the log.
+    [string] $UserApprovedWithoutDeviceStart = ''
 )
 # Native tools (adb, ssh, curl) write to stderr; every call checks $LASTEXITCODE / output and throws explicitly.
 $ErrorActionPreference = 'Continue'
@@ -89,7 +104,11 @@ if ($live -and $live.buildNumber) {
     foreach ($v in @($live) + @($live.variants)) {
         if ($v -and $v.buildNumber) { $c = [int]$v.buildNumber + $(switch ([string]$v.abi) { 'armeabi-v7a' { 1000 } 'arm64-v8a' { 2000 } 'x86_64' { 4000 } default { 0 } }); if ($c -gt $liveCode) { $liveCode = $c } }
     }
-    if ($code -le $liveCode) { throw "versionCode $code is not above $liveCode (live $($live.versionLabel)) - phones would refuse it as a downgrade. Bump pubspec.yaml and rebuild." }
+    if ($code -le $liveCode -and -not $RollbackSha) { throw "versionCode $code is not above $liveCode (live $($live.versionLabel)) - phones would refuse it as a downgrade. Bump pubspec.yaml and rebuild." }
+    if ($RollbackSha) {
+        if ($sha -ne $RollbackSha.ToLowerInvariant()) { throw "ROLLBACK refused: smartwash.apk is $sha, not the approved rollback file $RollbackSha." }
+        Write-Warning "ROLLBACK to versionCode $code (live is $liveCode). Phones with a newer build installed must UNINSTALL Smart Wash before installing it (Android does not downgrade)."
+    }
 }
 
 # --- 2. a real device is mandatory -------------------------------------------------------------------------
@@ -132,12 +151,31 @@ function Test-Installable([string] $file, [string] $label) {
     if ($Matches[1] -ne $appId) { throw "$label : package $($Matches[1]) != $appId." }
     $vc = [int]$Matches[2]
     if ($vc -ne $code) { throw "$label : versionCode $vc != expected $code." }
-    if ($vc -le $script:liveMaxCode -and $label -notlike 'PUBLIC*') { throw "$label : versionCode $vc not above $script:liveMaxCode already published - Android would refuse the update (downgrade)." }
+    if ($vc -le $script:liveMaxCode -and $label -notlike 'PUBLIC*' -and -not $RollbackSha) { throw "$label : versionCode $vc not above $script:liveMaxCode already published - Android would refuse the update (downgrade)." }
     $minSdk = if ($b -match "sdkVersion:'(\d+)'") { [int]$Matches[1] } else { 999 }
     if ($minSdk -gt 24) { throw "$label : minSdk $minSdk would block Android 7+ phones that can run the app." }
     if ($b -match 'application-debuggable' -or $b -match "testOnly='-1'") { throw "$label : debuggable/testOnly build." }
     if ($b -notmatch "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'") { throw "$label : native-code is not arm64-v8a + armeabi-v7a + x86_64." }
     Write-Host "  $label : installable on every Android 7+ phone - sha, zip CRC, ABIs arm64/armv7/x86_64, v1+v2+v3 release cert, versionCode $vc, minSdk $minSdk, 16 KB aligned" -ForegroundColor Green
+}
+
+# IN-PLACE UPDATE rule (permanent, 2026-10-29): the new build must install OVER the build phones have now, without
+# uninstalling. Android allows that only for the same package, a signer the installed app trusts and a higher
+# versionCode - proven here on the actual files (the live public APK vs the downloaded candidate).
+function Test-UpdatesOver([string] $oldFile, [string] $newFile) {
+    function Identity([string] $f) {
+        $b = & $aapt dump badging $f 2>&1 | Out-String
+        if ($b -notmatch "package: name='([^']+)' versionCode='(\d+)'") { throw "unreadable manifest: $f" }
+        $pkg = $Matches[1]; $vc = [int]$Matches[2]
+        $sig = & $apksigner verify --print-certs --min-sdk-version 23 $f 2>&1 | Out-String
+        $certs = @([regex]::Matches($sig, 'certificate SHA-256 digest: ([0-9a-f]{64})') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+        [pscustomobject]@{ Package = $pkg; Code = $vc; Certs = $certs }
+    }
+    $old = Identity $oldFile; $new = Identity $newFile
+    if ($old.Package -ne $new.Package) { throw "IN-PLACE UPDATE IMPOSSIBLE: live app is $($old.Package), new build is $($new.Package) - users would have to uninstall." }
+    if (-not ($new.Certs | Where-Object { $old.Certs -contains $_ })) { throw "IN-PLACE UPDATE IMPOSSIBLE: new build is signed by $($new.Certs -join ','), the installed app by $($old.Certs -join ',')." }
+    if ($new.Code -le $old.Code) { throw "IN-PLACE UPDATE IMPOSSIBLE: versionCode $($new.Code) is not above the live $($old.Code) (downgrade)." }
+    Write-Host "  updates the live build in place: $($new.Package), same signer $($new.Certs[0].Substring(0, 16))..., versionCode $($old.Code) -> $($new.Code)" -ForegroundColor Green
 }
 
 # Layer B runtime: attached phones, else a local emulator when this PC can run one.
@@ -194,7 +232,7 @@ try {
     if ($dlSha -ne $sha) { throw "The candidate downloaded from $candUrl differs from the build ($dlSha vs $sha)." }
     Test-Installable $downloaded 'candidate (downloaded from staging)'
     $liveFile = $null
-    if ($live) { $liveFile = Join-Path $work 'live-downloaded.apk'; $null = Fetch $PublicUrl $liveFile }
+    if ($live -and -not $RollbackSha) { $liveFile = Join-Path $work 'live-downloaded.apk'; $null = Fetch $PublicUrl $liveFile; Test-UpdatesOver $liveFile $downloaded }
 
     # --- 5. install + launch gate on every device ----------------------------------------------------------
     foreach ($d in $devices) {
@@ -233,6 +271,56 @@ try {
         & $adb -s $d shell am force-stop $appId 2>$null | Out-Null
     }
 
+    # --- 5b. START GATE: the candidate must have STARTED on a real Android device -----------------------------
+    # PERMANENT RULE (2026-10-29): builds 2013 and 2014 passed every file check, went public, installed on a phone and
+    # then never started (no request from them ever reached the server). File checks cannot prove a build RUNS. So no
+    # build becomes public until THIS build itself reports "started" (first screen drawn — lib/main.dart) from a
+    # device, with zero crash reports (SmartWashApplication / Dart error reporting). No switch to skip it.
+    $gateUrl = "$($info.apiBaseUrl)/api/public/app-release/android/canary?build=$code"
+    $qrUrl = "$candUrl/qr"   # open on the PC, scan with the phone camera
+    Write-Host ''
+    Write-Host '=== START GATE: install the candidate on a phone and OPEN it ===' -ForegroundColor Yellow
+    Write-Host "  1. On the phone (with the current Smart Wash installed) open: $candUrl"
+    Write-Host "     (QR for the phone camera: $qrUrl)"
+    Write-Host "  2. Install it OVER the existing app (no uninstall), then open Smart Wash and wait for the first screen."
+    Write-Host "  Waiting up to $StartGateMinutes min for build $code to report 'started' at $gateUrl ..."
+    $deadline = (Get-Date).AddMinutes($StartGateMinutes)
+    $gate = $null
+    if ($UserApprovedWithoutDeviceStart) {
+        $gate = Invoke-RestMethod -Uri $gateUrl -TimeoutSec 20 -Headers @{ 'Cache-Control' = 'no-cache' }
+        if ([int]$gate.crashes -gt 0) { throw "START GATE: build $code has crash reports - not published despite the approval:`n$($gate.lastCrash)" }
+        Write-Warning ("START GATE NOT MET ON A DEVICE - published on the USER'S EXPLICIT APPROVAL: $UserApprovedWithoutDeviceStart. " +
+            "Native Android start-up of build $code is UNVERIFIED (device start reports so far: $($gate.started)).")
+        $gate = [pscustomobject]@{ started = 1; crashes = 0 }
+        $deadline = Get-Date
+    }
+    if ($RollbackSha) {
+        $since = if ($RunEvidenceSinceUtc) { $RunEvidenceSinceUtc } else { (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') }
+        Write-Host "  (rollback build: waiting for a RUNNING build $code to do its start-up update check - server log line 'App update: build $code ')"
+        while ((Get-Date) -lt $deadline) {
+            # Last line 'true # …' absorbs the CR PowerShell appends to piped stdin (else grep gets a stray argument).
+            $hit = ((("sudo journalctl -u smartwash-staging-api --since '$since UTC' --no-pager | grep -m1 'App update: build $code '", 'true # cr') -join "`n") | ssh -i $SshKey -o IdentitiesOnly=yes $Target 'bash -s' | Out-String).Trim()
+            if ($hit) { Write-Host "  build $code is RUNNING on a device: $hit" -ForegroundColor Green; $gate = [pscustomobject]@{ started = 1; crashes = 0 }; break }
+            Start-Sleep -Seconds 10
+        }
+        $deadline = Get-Date
+    }
+    while ((Get-Date) -lt $deadline) {
+        try { $gate = Invoke-RestMethod -Uri $gateUrl -TimeoutSec 20 -Headers @{ 'Cache-Control' = 'no-cache' } } catch { $gate = $null }
+        if ($gate -and [int]$gate.crashes -gt 0) {
+            throw "START GATE FAILED: build $code CRASHED on $($gate.device) (sdk $($gate.sdk)):`n$($gate.lastCrash)`nNothing was made public."
+        }
+        if ($gate -and [int]$gate.started -gt 0) {
+            Write-Host "  build $code STARTED on a device ($($gate.device), sdk $($gate.sdk)) at $($gate.lastStartedAt)" -ForegroundColor Green
+            Start-Sleep -Seconds 20   # a crash right after the first frame still blocks the release
+            $gate = Invoke-RestMethod -Uri $gateUrl -TimeoutSec 20 -Headers @{ 'Cache-Control' = 'no-cache' }
+            if ([int]$gate.crashes -gt 0) { throw "START GATE FAILED: build $code crashed right after starting:`n$($gate.lastCrash)" }
+            break
+        }
+        Start-Sleep -Seconds 10
+    }
+    if (-not $gate -or [int]$gate.started -lt 1) { throw "START GATE: build $code did not report a successful start within $StartGateMinutes min. Nothing was made public (the candidate stays at $candUrl)." }
+
     # --- 6. promote: the verified file becomes the public download ----------------------------------------
     Remote @(
         'set -e',
@@ -258,6 +346,18 @@ try {
     }
     $served = Invoke-RestMethod -Uri $infoUrl -TimeoutSec 20 -Headers @{ 'Cache-Control' = 'no-cache' }
     if ([int]$served.buildNumber -ne [int]$info.buildNumber -or $served.sha256 -ne $sha) { throw "/info still reports build $($served.buildNumber) sha $($served.sha256)." }
+    # In-app updater: the API (what installed apps ask) must now offer exactly this file to the previous build.
+    if ($info.apiBaseUrl) {
+        $prev = if ($RollbackSha) { $code } elseif ($live -and $live.buildNumber) { [int]$live.buildNumber } else { $code - 1 }
+        $chk = Invoke-RestMethod -Uri "$($info.apiBaseUrl)/api/public/app-release/android?build=$prev" -TimeoutSec 20 -Headers @{ 'Cache-Control' = 'no-cache' }
+        $expectOffer = -not $RollbackSha
+        if ([bool]$chk.updateAvailable -ne $expectOffer -or [int]$chk.versionCode -ne $code -or $chk.sha256 -ne $sha -or $chk.certSha256 -ne $pin -or $chk.applicationId -ne $appId) {
+            throw "In-app update metadata is wrong: $($chk | ConvertTo-Json -Compress)"
+        }
+        $updFile = Join-Path $work 'in-app-update.apk'
+        if ((Fetch $chk.downloadUrl $updFile) -ne $sha) { throw "The in-app update download ($($chk.downloadUrl)) differs from the verified build." }
+        Write-Host "  in-app update: build $prev is offered $($chk.versionName) ($($chk.versionCode)), mandatory=$($chk.mandatory), file sha matches" -ForegroundColor Green
+    }
     $how = if ($devices.Count) { "installed + launched on $($devices.Count) device(s)" } else { 'install-compatibility checks only (no phone/emulator available)' }
     Write-Host "PUBLISHED $($served.fileName) - gate: $how - $PublicUrl" -ForegroundColor Green
 }

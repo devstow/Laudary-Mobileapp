@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:provider/provider.dart';
 
 import '../../l10n/l10n.dart';
@@ -132,7 +132,7 @@ class _TrackScreenState extends State<TrackScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _phone,
-                        keyboardType: TextInputType.phone,
+                        keyboardType: TextInputType.phone, textDirection: TextDirection.ltr,
                         textInputAction: TextInputAction.search,
                         onSubmitted: (_) => _track(),
                         onChanged: (_) { if (_phoneError != null) setState(() => _phoneError = null); },

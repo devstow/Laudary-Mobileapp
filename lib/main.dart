@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
@@ -17,11 +20,42 @@ import 'services/profile_service.dart';
 import 'services/tenant_service.dart';
 import 'core/realtime.dart';
 import 'features/driver/location_tracker.dart';
+import 'features/notifications/notification_center.dart';
+import 'features/update/app_release.dart';
+import 'features/update/update_controller.dart';
 import 'state/app_state.dart';
 import 'state/theme_controller.dart';
 
+/// This build's versionCode (from APP_VERSION "1.0.6+2015"), null in dev builds.
+int? get _buildNumber => int.tryParse(AppConfig.appVersion.split('+').last);
+
+/// Release gate + diagnostics: every Dart error is reported to the server once (stage "dartError"), and "started"
+/// is reported after the first frame — the proof tool/publish_apk.ps1 waits for before a build may go public.
+void _installStartupReporting() {
+  final releases = AppReleaseService();
+  final sent = <String>{};
+  void report(String stage, Object error, StackTrace? stack) {
+    final text = '$error | ${stack ?? ''}';
+    if (!sent.add(text.length > 300 ? text.substring(0, 300) : text) || sent.length > 20) return;
+    unawaited(releases.report({'fromBuild': _buildNumber, 'toBuild': _buildNumber, 'stage': stage, 'detail': text.length > 3500 ? text.substring(0, 3500) : text}));
+  }
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) {
+    report('dartError', details.exception, details.stack);
+    previous?.call(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    report('dartError', error, stack);
+    return false;
+  };
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(releases.report({'fromBuild': _buildNumber, 'toBuild': _buildNumber, 'stage': 'started', 'detail': AppConfig.appVersion}));
+  });
+}
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  _installStartupReporting();
 
   // A release build without an explicit HTTPS API URL can never reach a server: say so instead of
   // failing every request with a confusing "network error" (see AppConfig.releaseConfigError).
@@ -39,6 +73,8 @@ void main() {
   final auth = AuthService(api);
 
   final appState = AppState(api: api, store: store, auth: auth, locale: locale, theme: theme)..bootstrap();
+  // In-app updates (sideloaded APK): checked before login / normal use, then periodically while open.
+  final updates = UpdateController()..startup();
 
   runApp(
     MultiProvider(
@@ -57,6 +93,8 @@ void main() {
         ChangeNotifierProvider<AppState>.value(value: appState),
         ChangeNotifierProvider<RealtimeClient>.value(value: appState.realtime),
         ChangeNotifierProvider<LocationTracker>.value(value: appState.tracker),
+        ChangeNotifierProvider<UpdateController>.value(value: updates),
+        ChangeNotifierProvider<NotificationCenter>.value(value: appState.notifications),
       ],
       child: const SmartWashApp(),
     ),

@@ -23,6 +23,7 @@ import '../../widgets/order_timeline.dart';
 import '../../widgets/ui.dart';
 import '../assistant/assistant_screen.dart';
 import '../navigation/navigation_screen.dart';
+import '../update/resume_point.dart';
 import '../invoice/invoice_screen.dart';
 import '../receipt/receipt_screen.dart';
 import '../neworder/new_order_screen.dart';
@@ -49,6 +50,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    ScreenTracker.open('order', widget.orderId, label: widget.orderNumber);
     _load();
     // Live: reload when THIS order (or one of its pickup/delivery tasks) changes.
     _rt = context.read<RealtimeClient>().events.listen((e) {
@@ -59,6 +61,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   @override
   void dispose() {
     _rt?.cancel();
+    ScreenTracker.close('order', widget.orderId);
     super.dispose();
   }
 

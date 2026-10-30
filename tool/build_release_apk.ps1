@@ -36,7 +36,15 @@ param(
     [string] $PublicInfoUrl = '',
     [switch] $SkipServerCheck,
     # The adb install gate is mandatory when a device is attached; pass this to skip it deliberately.
-    [switch] $SkipDeviceInstall
+    [switch] $SkipDeviceInstall,
+    # In-app update metadata (written into smartwash.json, served by api/public/app-release/android). Defaults come
+    # from tool/release-notes.json ({"en": "...", "ar": "..."}) - update it for every release.
+    [string] $ReleaseNotes = '',
+    [string] $ReleaseNotesAr = '',
+    # Installed builds BELOW this must update before the app can be used (0 = every update is optional).
+    # -Mandatory = every older build must update.
+    [int] $MinSupportedBuild = 0,
+    [switch] $Mandatory
 )
 # 'Continue', not 'Stop': flutter/apksigner/aapt print warnings on stderr, which Windows PowerShell would otherwise
 # turn into terminating errors. Every native call below checks $LASTEXITCODE and throws explicitly.
@@ -112,7 +120,7 @@ if ($live) { Write-Host "Landing page serves $($live.versionLabel) today; this b
 flutter pub get | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed.' }
 $symbols = Join-Path $root "build\symbols\$version+$build"
-flutter build apk --release --target-platform android-arm,android-arm64,android-x64 --obfuscate "--split-debug-info=$symbols" "--dart-define-from-file=$envFile" | Out-Host
+flutter build apk --release --target-platform android-arm,android-arm64,android-x64 --obfuscate "--split-debug-info=$symbols" "--dart-define-from-file=$envFile" "--dart-define=APP_VERSION=$version+$build" | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'flutter build apk failed.' }
 
 # One universal file: every ABI a compatible phone (or Chromebook / emulator) can have.
@@ -195,6 +203,17 @@ if (-not $SkipDeviceInstall) {
     }
 }
 
+# --- in-app update metadata -----------------------------------------------------------------------
+$notesFile = Join-Path $root 'tool\release-notes.json'
+if (Test-Path $notesFile) {
+    $notesJson = Get-Content $notesFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($ReleaseNotes -eq '' -and $notesJson.en) { $ReleaseNotes = [string]$notesJson.en }
+    if ($ReleaseNotesAr -eq '' -and $notesJson.ar) { $ReleaseNotesAr = [string]$notesJson.ar }
+}
+if ($ReleaseNotes -eq '') { Write-Warning 'No release notes (tool/release-notes.json or -ReleaseNotes): the update prompt will show none.' }
+if ($Mandatory) { $MinSupportedBuild = $build }
+if ($MinSupportedBuild -gt $build) { throw "MinSupportedBuild $MinSupportedBuild is above this build ($build): nobody could satisfy it." }
+
 # --- package for publishing ----------------------------------------------------------------------
 foreach ($r in $results) {
     $v = $r.Variant
@@ -219,6 +238,9 @@ foreach ($r in $results) {
         minSdk        = $r.MinSdk
         targetSdk     = $r.TargetSdk
         builtAtUtc    = (Get-Date).ToUniversalTime().ToString('o')
+        minSupportedBuild = $MinSupportedBuild
+        releaseNotes  = $ReleaseNotes
+        releaseNotesAr = $ReleaseNotesAr
     }
     [IO.File]::WriteAllText((Join-Path $OutDir $v.Json), ($info | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false))  # no BOM
     Write-Host ''

@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             TextFormField(
               controller: _email,
-              keyboardType: TextInputType.emailAddress,
+              keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(labelText: context.t('Email'), prefixIcon: const Icon(Icons.mail_outline_rounded)),
               validator: (v) => (v == null || !v.contains('@')) ? context.t('Email') : null,

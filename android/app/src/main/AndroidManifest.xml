@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Map pin picker: "use my current location" (geolocator) + OSM tiles. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -13,9 +14,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- ForegroundNotificationConfig.enableWakeLock: keeps the CPU awake for fixes while the screen is off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- In-app updates of the sideloaded APK (AppUpdater.kt): lets the app ASK Android to install a newer build of
+         itself. Android still shows its own confirmation and the user must allow "Install unknown apps" for Smart Wash
+         once; nothing is ever installed silently. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:label="@string/app_name"
-        android:name="${applicationName}"
+        android:name=".SmartWashApplication"
         android:icon="@mipmap/ic_launcher">
         <!-- Plain http:// (local API at 10.0.2.2) is allowed ONLY in debug/profile builds: see
              src/debug/AndroidManifest.xml. Release builds talk HTTPS to the staging/production API,
@@ -47,6 +52,23 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- WorkManager must NOT initialise itself at process start (a library failure there kills the app before any
+             screen). SmartWashApplication provides its configuration on demand instead. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data android:name="androidx.work.WorkManagerInitializer" android:value="androidx.startup" tools:node="remove" />
+        </provider>
+        <!-- In-app update: PackageInstaller session results, and "updated — tap to open" after the new version replaced
+             this one (Android does not reopen an updated app by itself). -->
+        <receiver android:name=".InstallResultReceiver" android:exported="false" />
+        <receiver android:name=".PackageReplacedReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <!-- Shares documents saved on Android 7–9 (receipt PDFs) with the viewer app; Android 10+ uses
              MediaStore content URIs instead. See MainActivity.kt (channel smartwash/downloads). -->
         <provider

@@ -516,9 +516,121 @@ class AppStrings {
     'Allow location for Smart Wash in your phone settings.': 'اسمح لتطبيق Smart Wash بالوصول إلى الموقع من إعدادات هاتفك.',
     'Settings': 'الإعدادات',
     'Location sharing stopped': 'توقفت مشاركة الموقع',
+    'Checking for updates…': 'جارٍ التحقق من وجود تحديثات…',
+    'Downloading update': 'جارٍ تنزيل التحديث',
+    'Verifying download': 'جارٍ التحقق من الملف',
+    'Starting installation': 'جارٍ بدء التثبيت',
+    'Confirm the installation': 'أكّد التثبيت',
+    'Completing update': 'جارٍ إكمال التحديث',
+    'Update not installed': 'لم يتم تثبيت التحديث',
+    'Download cancelled': 'تم إلغاء التنزيل',
+    'Update failed': 'فشل التحديث',
+    'Permission needed': 'مطلوب إذن',
+    'Use the Android installer': 'استخدام مثبّت Android',
+    'Open the installer again': 'فتح المثبّت مرة أخرى',
+    'Install update': 'تثبيت التحديث',
+    'New version': 'الإصدار الجديد',
+    'Download': 'التنزيل',
+    'Install': 'التثبيت',
+    'Restart': 'إعادة التشغيل',
+    'Checking that the file is complete, genuine and made for this app…': 'جارٍ التأكد من أن الملف مكتمل وأصلي ومخصص لهذا التطبيق…',
+    'Opening the Android installer…': 'جارٍ فتح مثبّت Android…',
+    'Android is asking you to confirm. Tap "Update" (or "Install") in the Android window. Your data and sign-in are kept.': 'يطلب منك Android التأكيد. اضغط "تحديث" (أو "تثبيت") في نافذة Android. تبقى بياناتك وتسجيل دخولك كما هي.',
+    'Android is installing the new version and will close Smart Wash. If the installer shows "Open", tap it — otherwise open Smart Wash again.': 'يقوم Android بتثبيت الإصدار الجديد وسيغلق Smart Wash. إذا ظهر زر "فتح" في المثبّت فاضغطه — وإلا افتح Smart Wash مرة أخرى.',
+    'The installation was cancelled or did not finish. Your current version and data are unchanged. The verified update is still on the phone — no new download needed.': 'تم إلغاء التثبيت أو لم يكتمل. إصدارك الحالي وبياناتك دون تغيير. التحديث الذي تم التحقق منه ما زال على الهاتف — لا حاجة لتنزيله من جديد.',
+    'Update complete': 'اكتمل التحديث',
+    'Welcome back! You are now using version': 'مرحباً بعودتك! أنت الآن تستخدم الإصدار',
+    'Network error. Please check your connection.': 'خطأ في الشبكة. يرجى التحقق من اتصالك.',
+    'Something went wrong.': 'حدث خطأ ما.',
+    'AMOUNT': 'المبلغ',
+    'Add your default pickup address': 'أضف عنوان الاستلام الافتراضي',
+    'Amount Paid': 'المبلغ المدفوع',
+    'Amount in Words': 'المبلغ كتابةً',
+    'Balance': 'الرصيد المتبقي',
+    'Cashier': 'أمين الصندوق',
+    'Client': 'العميل',
+    'Date': 'التاريخ',
+    'Default pickup address': 'عنوان الاستلام الافتراضي',
+    'EMAIL': 'البريد الإلكتروني',
+    'Fail': 'فشل',
+    'Full name is required': 'الاسم الكامل مطلوب',
+    'ITEM': 'الصنف',
+    'Issued': 'صادرة',
+    'Map': 'خريطة',
+    'No unread notifications': 'لا توجد إشعارات غير مقروءة',
+    'Note': 'ملاحظة',
+    'Order': 'الطلب',
+    'Order No.': 'رقم الطلب',
+    'Receipt No.': 'رقم الإيصال',
+    'SUBTOTAL': 'المجموع الفرعي',
+    'Sales Receipt': 'إيصال بيع',
+    'Satellite': 'قمر صناعي',
+    'Scheduled': 'مجدول',
+    'TEL': 'الهاتف',
+    'THANK YOU FOR TRUSTING US!': 'شكراً لثقتكم بنا!',
+    'TOTAL': 'الإجمالي',
+    'Task': 'المهمة',
+    'Tax No.': 'الرقم الضريبي',
+    'To-do': 'للتنفيذ',
+    'Unread': 'غير مقروءة',
+    'Upcoming': 'القادمة',
+    'Used to pre-fill new pickup requests': 'يُستخدم لتعبئة طلبات الاستلام الجديدة تلقائياً',
+    'View details': 'عرض التفاصيل',
+    'View receipt': 'عرض الإيصال',
+    'ago': 'مضت',
+    'just now': 'الآن',
+    'Fullscreen': 'ملء الشاشة',
+    'Update required': 'التحديث مطلوب',
+    'A new version is available': 'يتوفر إصدار جديد',
+    'Version': 'الإصدار',
+    'Installed': 'المثبّت',
+    'This version is no longer supported. Connect to the internet to download the update.': 'لم يعد هذا الإصدار مدعوماً. اتصل بالإنترنت لتنزيل التحديث.',
+    'This version is no longer supported. Please update to continue.': 'لم يعد هذا الإصدار مدعوماً. يرجى التحديث للمتابعة.',
+    "What's new": 'ما الجديد',
+    'Download size': 'حجم التنزيل',
+    'Later': 'لاحقاً',
+    'Update Now': 'حدّث الآن',
+    'Open settings': 'فتح الإعدادات',
+    'Show the installer again': 'إظهار نافذة التثبيت مرة أخرى',
+    'Try again': 'حاول مرة أخرى',
+    'Continue with this version': 'المتابعة بهذا الإصدار',
+    'The previous update was not installed. You can try again.': 'لم يتم تثبيت التحديث السابق. يمكنك المحاولة مرة أخرى.',
+    'To update, allow Smart Wash to install apps: tap Open settings, turn on "Allow from this source", then come back. Android will still ask you to confirm the update.': 'للتحديث، اسمح لتطبيق Smart Wash بتثبيت التطبيقات: اضغط فتح الإعدادات، وفعّل "السماح من هذا المصدر"، ثم عُد إلى التطبيق. سيطلب منك Android تأكيد التحديث.',
+    'Downloading…': 'جارٍ التنزيل…',
+    'Checking the download…': 'جارٍ التحقق من الملف…',
+    'Installing… Android will close and update the app. Open Smart Wash again if it does not reopen.': 'جارٍ التثبيت… سيغلق Android التطبيق ويحدّثه. افتح Smart Wash مرة أخرى إذا لم يُفتح تلقائياً.',
+    'Confirm the update in the Android window ("Update" / "Install"). Your data stays on the phone.': 'أكّد التحديث في نافذة Android ("تحديث" / "تثبيت"). تبقى بياناتك على الهاتف.',
+    'Download cancelled. Nothing was changed.': 'تم إلغاء التنزيل. لم يتغير شيء.',
+    'The update was cancelled. Smart Wash was not changed.': 'تم إلغاء التحديث. لم يتغير تطبيق Smart Wash.',
+    'The download was interrupted. Check your internet connection and try again.': 'انقطع التنزيل. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.',
+    'The update server did not return the file. Try again in a few minutes.': 'لم يُرجع خادم التحديث الملف. حاول مرة أخرى بعد بضع دقائق.',
+    'Not enough free storage on the phone to download the update. Free up some space and try again.': 'لا توجد مساحة تخزين كافية على الهاتف لتنزيل التحديث. أفرغ بعض المساحة وحاول مرة أخرى.',
+    'The downloaded file is incomplete or damaged. It was deleted — try again.': 'الملف الذي تم تنزيله غير مكتمل أو تالف. تم حذفه — حاول مرة أخرى.',
+    'The downloaded file is not a valid app package. It was deleted — try again.': 'الملف الذي تم تنزيله ليس حزمة تطبيق صالحة. تم حذفه — حاول مرة أخرى.',
+    'The download is not a Smart Wash update. It was rejected.': 'الملف الذي تم تنزيله ليس تحديثاً لـ Smart Wash. تم رفضه.',
+    'The download is not newer than the installed app. It was rejected.': 'الملف الذي تم تنزيله ليس أحدث من التطبيق المثبّت. تم رفضه.',
+    'This copy of Smart Wash was signed differently from the update, so Android cannot install it over it. Contact support.': 'هذه النسخة من Smart Wash موقّعة بشكل مختلف عن التحديث، لذا لا يستطيع Android تثبيته فوقها. تواصل مع الدعم.',
+    'This update is not compatible with this phone.': 'هذا التحديث غير متوافق مع هذا الهاتف.',
+    'Android blocked the installation (device policy or Play Protect).': 'منع Android التثبيت (سياسة الجهاز أو Play Protect).',
+    'The release information is incomplete, so the update cannot be verified. Try again later.': 'معلومات الإصدار غير مكتملة، لذا لا يمكن التحقق من التحديث. حاول لاحقاً.',
+    'The update could not be installed. Smart Wash was not changed — try again.': 'تعذّر تثبيت التحديث. لم يتغير Smart Wash — حاول مرة أخرى.',
+    'needed': 'المطلوب',
+    'Smart Wash was updated to version': 'تم تحديث Smart Wash إلى الإصدار',
+    'The task you were viewing is no longer assigned to you.': 'المهمة التي كنت تعرضها لم تعد مسندة إليك.',
+    'The screen you were on could not be reopened.': 'تعذّر إعادة فتح الشاشة التي كنت عليها.',
   };
 
   static String get(String key, String lang) => lang == 'ar' ? (_ar[key] ?? key) : key;
+
+  /// Every English key that has an Arabic translation — used by test/l10n_coverage_test.dart, which fails the build
+  /// when a new UI string ships without Arabic (permanent rule: every feature is bilingual).
+  static Iterable<String> get arabicKeys => _ar.keys;
+
+  /// The language the UI is showing right now (kept current by the app's root builder) — for code that has no
+  /// BuildContext, e.g. error messages created in services.
+  static String current = 'en';
+
+  static String tr(String key) => get(key, current);
 }
 
 extension L10nX on BuildContext {
@@ -527,3 +639,10 @@ extension L10nX on BuildContext {
     return AppStrings.get(key, lang);
   }
 }
+
+final RegExp _arabicLetters = RegExp(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]');
+
+/// Keeps a Latin / numeric value (phone number, e-mail, order number, tracking id, URL, amount) readable inside an
+/// Arabic (RTL) paragraph: wraps it in a Unicode left-to-right isolate so "+966 50 123 4567" or "ORD-0012" are never
+/// reordered by the bidi algorithm. Text that contains Arabic is returned unchanged.
+String ltr(String value) => value.isEmpty || _arabicLetters.hasMatch(value) ? value : '\u2066$value\u2069';

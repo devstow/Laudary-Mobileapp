@@ -7,6 +7,8 @@ import '../core/api_client.dart';
 import '../core/token_store.dart';
 import '../core/realtime.dart';
 import '../features/driver/location_tracker.dart';
+import '../features/notifications/notification_center.dart';
+import '../features/update/resume_point.dart';
 import '../l10n/l10n.dart';
 import '../models/auth.dart';
 import '../models/tenant.dart';
@@ -38,9 +40,11 @@ class AppState extends ChangeNotifier {
   final ThemeController theme;
   final TenantService _tenants;
   /// Live updates from the API hub (orders/tasks/notifications) — connected for the signed-in session.
-  late final RealtimeClient realtime = RealtimeClient(store);
+  late final RealtimeClient realtime = RealtimeClient(store, tokenProvider: api.freshAccessToken);
   /// Driver location sharing — started automatically for a driver session (see LocationTracker).
   late final LocationTracker tracker = LocationTracker(TrackingService(api), lang: () => locale.code);
+  /// Unread count (server-authoritative) for the bells + Android launcher badge / background sync.
+  late final NotificationCenter notifications = NotificationCenter(api, realtime, lang: () => locale.code);
 
   AppStatus status = AppStatus.bootstrapping;
   String? tenantName;
@@ -81,6 +85,7 @@ class AppState extends ChangeNotifier {
     _set(AppStatus.loggedIn);
     unawaited(realtime.connect());
     _startDriverTracking();
+    unawaited(notifications.start(user!.id));
     // Refresh the laundry's CURRENT branding + currency (best-effort, never blocks the UI).
     unawaited(_refreshBranding(user!.tenantId));
   }
@@ -126,6 +131,7 @@ class AppState extends ChangeNotifier {
     _set(AppStatus.loggedIn);
     unawaited(realtime.connect());
     _startDriverTracking();
+    unawaited(notifications.start(result.user.id));
   }
 
   void _startDriverTracking() {
@@ -143,6 +149,7 @@ class AppState extends ChangeNotifier {
   Future<void> setLanguage(String code) async {
     locale.setLanguage(code);
     await store.setLocale(code);
+    unawaited(notifications.languageChanged());
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
@@ -155,6 +162,9 @@ class AppState extends ChangeNotifier {
   // The next sign-in may be a different business, so drop the cached branding too.
   Future<void> _signedOut() async {
     await tracker.stop();
+    // Previous user's badge, system notifications and background sync go away with the session.
+    await notifications.stop();
+    ScreenTracker.reset();
     await realtime.disconnect();
     await store.clearAll();
     user = null;

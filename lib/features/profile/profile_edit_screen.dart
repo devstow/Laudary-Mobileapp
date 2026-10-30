@@ -174,6 +174,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         child: TextFormField(
           controller: c,
           keyboardType: keyboard,
+          // phone / e-mail stay left-to-right inside the Arabic layout
+          textDirection: keyboard == TextInputType.phone || keyboard == TextInputType.emailAddress ? TextDirection.ltr : null,
           maxLength: maxLength,
           maxLines: maxLines,
           textInputAction: textInputAction,

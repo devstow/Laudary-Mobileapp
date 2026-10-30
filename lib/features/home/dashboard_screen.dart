@@ -10,13 +10,13 @@ import '../../models/ai.dart';
 import '../../models/enums.dart';
 import '../../models/order.dart';
 import '../../services/api_exception.dart';
-import '../../services/notification_service.dart';
 import '../../services/order_service.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/order_card.dart';
 import '../../widgets/ui.dart';
 import '../assistant/assistant_screen.dart';
+import '../notifications/notification_center.dart';
 import '../notifications/notifications_screen.dart';
 import '../orders/orders_screen.dart';
 import '../payments/payments_screen.dart';
@@ -35,6 +35,11 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   late Future<CustomerOrderPage> _future;
   int _unread = 0;
   Timer? _poll;
+  NotificationCenter? _center;
+
+  void _onCenter() {
+    if (mounted && _center!.unread != _unread) setState(() => _unread = _center!.unread);
+  }
   StreamSubscription<RealtimeEvent>? _rt;
 
   @override
@@ -48,11 +53,14 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     // Poll the unread count so the bell badge updates on its own when a new
     // notification arrives — same approach as the web bell (which polls ~25s).
     _poll = Timer.periodic(const Duration(seconds: 20), (_) => _loadUnread());
+    // Realtime: the center re-reads the server count on every notification event — follow it.
+    _center = context.read<NotificationCenter>()..addListener(_onCenter);
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _center?.removeListener(_onCenter);
     _rt?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -82,7 +90,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
 
   Future<void> _loadUnread() async {
     try {
-      final n = await context.read<NotificationService>().unreadCount();
+      final n = await context.read<NotificationCenter>().refresh();
+      if (n == null) return;
       if (mounted && n != _unread) setState(() => _unread = n); // only rebuild when it changes
     } catch (_) {/* best-effort */}
   }
